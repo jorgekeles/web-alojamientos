@@ -60,13 +60,48 @@ const mapBookingLinks = (links = []) =>
     })
     .filter((link) => link.link && (link.priceDisplay || link.priceAmount !== null));
 
-const buildSerpApiUrl = ({ city, checkIn, checkOut, guests }) => {
+const normalize = (value) =>
+  value
+    ? value
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .trim()
+    : '';
+
+const TYPE_KEYWORDS = {
+  hotel: ['hotel'],
+  cabana: ['cabana', 'cabaña', 'cabin', 'lodge'],
+  departamento: ['departamento', 'apartment', 'apartamento', 'flat', 'suite'],
+  casa: ['casa', 'house', 'home', 'villa', 'chalet']
+};
+
+const buildQueryWithTypes = (city, types = []) => {
+  if (!types.length) return city;
+  const uniqueKeywords = new Set();
+  types.forEach((type) => {
+    const normalized = normalize(type);
+    const keywords = TYPE_KEYWORDS[normalized] || [type];
+    keywords.forEach((keyword) => uniqueKeywords.add(keyword));
+  });
+
+  const keywordPart = Array.from(uniqueKeywords)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+    .join(' ');
+
+  if (!keywordPart) return city;
+  return `${keywordPart} ${city}`.trim();
+};
+
+const buildSerpApiUrl = ({ city, checkIn, checkOut, guests, types }) => {
   const params = new URLSearchParams({
     engine: 'google_hotels',
     hl: 'es',
     gl: 'es',
     currency: 'USD',
-    q: city,
+    q: buildQueryWithTypes(city, types),
     adults: guests ? String(guests) : '1',
     api_key: SERPAPI_KEY
   });
@@ -75,6 +110,30 @@ const buildSerpApiUrl = ({ city, checkIn, checkOut, guests }) => {
   if (checkOut) params.set('check_out_date', checkOut);
 
   return `${SERPAPI_BASE_URL}?${params.toString()}`;
+};
+
+const matchesPreferredTypes = (hotel, preferredTypes = []) => {
+  if (!preferredTypes.length) return true;
+
+  const normalizedPreferred = preferredTypes
+    .map((type) => normalize(type))
+    .filter(Boolean);
+
+  if (!normalizedPreferred.length) return true;
+
+  const hotelHints = [hotel.type, hotel.property_type, hotel.category, hotel.subtype, hotel.address]
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map((value) => normalize(value))
+    .filter(Boolean);
+
+  if (!hotelHints.length) {
+    return true;
+  }
+
+  return normalizedPreferred.some((type) => {
+    const keywords = TYPE_KEYWORDS[type] || [type];
+    return hotelHints.some((hint) => keywords.some((keyword) => hint.includes(normalize(keyword))));
+  });
 };
 
 const fetchHotelResults = async (searchParams) => {
@@ -88,15 +147,18 @@ const fetchHotelResults = async (searchParams) => {
 
   const payload = await response.json();
 
-  const hotels = (payload.hotels_results || []).map((hotel) => ({
-    name: hotel.name,
-    address: hotel.address,
-    rating: hotel.rating,
-    reviews: hotel.reviews,
-    thumbnail: hotel.thumbnail,
-    totalPrice: hotel.total_price,
-    bookingOptions: mapBookingLinks(hotel.booking_links)
-  }));
+  const hotels = (payload.hotels_results || [])
+    .filter((hotel) => matchesPreferredTypes(hotel, searchParams.types))
+    .map((hotel) => ({
+      name: hotel.name,
+      address: hotel.address,
+      rating: hotel.rating,
+      reviews: hotel.reviews,
+      thumbnail: hotel.thumbnail,
+      totalPrice: hotel.total_price,
+      bookingOptions: mapBookingLinks(hotel.booking_links),
+      type: hotel.type || hotel.property_type || null
+    }));
 
   return hotels.filter((hotel) => hotel.bookingOptions.length > 0);
 };
@@ -109,18 +171,22 @@ app.get('/api/search', async (req, res) => {
   }
 
   const { city, checkIn, checkOut, guests } = req.query;
+  const types = typeof req.query.types === 'string' && req.query.types.length
+    ? req.query.types.split(',').map((value) => value.trim()).filter(Boolean)
+    : [];
 
   if (!city) {
     return res.status(400).json({ error: 'El parámetro "city" es obligatorio.' });
   }
 
   try {
-    const results = await fetchHotelResults({ city, checkIn, checkOut, guests });
+    const results = await fetchHotelResults({ city, checkIn, checkOut, guests, types });
     return res.json({
       city,
       checkIn,
       checkOut,
       guests: guests ? Number(guests) : undefined,
+      types,
       results
     });
   } catch (error) {
