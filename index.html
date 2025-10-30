@@ -28,11 +28,21 @@
         </label>
 
         <label class="field">
+          <span>Fecha de check-in</span>
+          <input type="date" id="checkIn" name="checkIn" required />
+        </label>
+
+        <label class="field">
+          <span>Fecha de check-out</span>
+          <input type="date" id="checkOut" name="checkOut" required />
+        </label>
+
+        <label class="field">
           <span>Cantidad de personas</span>
           <input type="number" id="guests" name="guests" min="1" max="12" value="2" required />
         </label>
 
-        <label class="field">
+        <label class="field field--full">
           <span>Tipo de alojamiento</span>
           <select id="types" name="types" multiple size="4" aria-label="Selecciona uno o varios tipos de alojamiento">
             <option value="hotel">Hotel</option>
@@ -49,6 +59,13 @@
 
     <section class="results" id="resultados">
       <h2>Resultados</h2>
+      <div class="search-overlay" id="searchOverlay" hidden>
+        <div class="search-overlay__inner" role="status" aria-live="polite">
+          <p class="search-overlay__status">Buscando alojamientos en <strong id="overlayCity">tu destino</strong>…</p>
+          <div class="search-overlay__spinner" aria-hidden="true"></div>
+          <p class="search-overlay__platforms">Consultando Airbnb, Booking.com, Expedia, Vrbo, Agoda, TripAdvisor y más.</p>
+        </div>
+      </div>
       <div class="results__container" id="resultsContainer">
         <p class="muted">Completa el formulario para ver sugerencias personalizadas.</p>
       </div>
@@ -57,7 +74,7 @@
     <section class="features" id="caracteristicas">
       <div class="feature">
         <h3>Principales buscadores</h3>
-        <p>Integramos referencias de Booking, Airbnb, Expedia y Hotels.com para comparar tarifas de manera transparente.</p>
+        <p>Integramos referencias de Airbnb, Booking.com, Expedia, Vrbo, Agoda, TripAdvisor, Trivago, Google Travel, Hostelworld, Couchsurfing, Spotahome y misterb&amp;b.</p>
       </div>
       <div class="feature">
         <h3>Filtros inteligentes</h3>
