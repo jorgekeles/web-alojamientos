@@ -158,6 +158,10 @@ main {
   margin-top: 2rem;
 }
 
+.results__container > .muted {
+  grid-column: 1 / -1;
+}
+
 .search-overlay {
   position: absolute;
   inset: 0;
@@ -224,6 +228,20 @@ main {
   gap: 1rem;
 }
 
+.result-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.result-card__thumb {
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  object-fit: cover;
+  box-shadow: 0 12px 24px -12px rgba(15, 27, 97, 0.4);
+}
+
 .result-card__dates {
   font-size: 0.9rem;
   color: var(--color-muted);
@@ -238,7 +256,14 @@ main {
   display: flex;
   gap: 1rem;
   flex-wrap: wrap;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+.result-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .comparison-table {
