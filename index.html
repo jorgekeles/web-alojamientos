@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comparador de Alojamientos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__overlay"></div>
+    <div class="hero__content">
+      <h1>Encuentra tu alojamiento ideal al mejor precio</h1>
+      <p>Compara hoteles, cabañas, departamentos y casas entre los principales buscadores en segundos.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="search" id="buscador">
+      <h2>Busca y compara</h2>
+      <form class="search__form" id="searchForm">
+        <label class="field">
+          <span>Ciudad</span>
+          <input type="text" id="city" name="city" placeholder="Ej. Madrid" required />
+        </label>
+
+        <label class="field">
+          <span>Cantidad de personas</span>
+          <input type="number" id="guests" name="guests" min="1" max="12" value="2" required />
+        </label>
+
+        <label class="field">
+          <span>Tipo de alojamiento</span>
+          <select id="types" name="types" multiple size="4" aria-label="Selecciona uno o varios tipos de alojamiento">
+            <option value="hotel">Hotel</option>
+            <option value="cabaña">Cabaña</option>
+            <option value="departamento">Departamento</option>
+            <option value="casa">Casa</option>
+          </select>
+          <small>Puedes seleccionar varias opciones manteniendo presionada la tecla Ctrl (Cmd en Mac).</small>
+        </label>
+
+        <button type="submit" class="btn">Comparar precios</button>
+      </form>
+    </section>
+
+    <section class="results" id="resultados">
+      <h2>Resultados</h2>
+      <div class="results__container" id="resultsContainer">
+        <p class="muted">Completa el formulario para ver sugerencias personalizadas.</p>
+      </div>
+    </section>
+
+    <section class="features" id="caracteristicas">
+      <div class="feature">
+        <h3>Principales buscadores</h3>
+        <p>Integramos referencias de Booking, Airbnb, Expedia y Hotels.com para comparar tarifas de manera transparente.</p>
+      </div>
+      <div class="feature">
+        <h3>Filtros inteligentes</h3>
+        <p>Ajusta tu búsqueda por ciudad, capacidad y tipo de alojamiento para encontrar la opción perfecta.</p>
+      </div>
+      <div class="feature">
+        <h3>Listo para GitHub Pages</h3>
+        <p>Este sitio está construido únicamente con HTML, CSS y JavaScript, ideal para desplegarlo en GitHub Pages sin configuraciones adicionales.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; <span id="year"></span> Comparador de Alojamientos. Todos los derechos reservados.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
