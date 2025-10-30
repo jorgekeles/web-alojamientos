@@ -76,6 +76,10 @@ const platformCatalog = {
     logo: 'https://logo.clearbit.com/google.com',
     buildUrl: ({ city }) => `https://www.google.com/travel/hotels/${encodeURIComponent(city)}?hl=es`
   },
+  'Google Hotels': {
+    logo: 'https://logo.clearbit.com/google.com',
+    buildUrl: ({ city }) => `https://www.google.com/travel/hotels/${encodeURIComponent(city)}?hl=es`
+  },
   Hostelworld: {
     logo: 'https://logo.clearbit.com/hostelworld.com',
     buildUrl: ({ city, checkIn, checkOut, guests }) => {
@@ -126,6 +130,7 @@ const priceAdjustments = {
   TripAdvisor: -2,
   Trivago: -1,
   'Google Travel': -3,
+  'Google Hotels': -3,
   Hostelworld: -10,
   Couchsurfing: -45,
   Spotahome: -6,
@@ -292,8 +297,16 @@ const formatDateRange = (checkIn, checkOut) => {
   return `${formatDisplayDate(checkIn)} - ${formatDisplayDate(checkOut)}`;
 };
 
+const resolvePlatformEntry = (platform) => {
+  if (platformCatalog[platform]) return platformCatalog[platform];
+  const matchKey = Object.keys(platformCatalog).find(
+    (key) => key.toLowerCase() === String(platform).toLowerCase()
+  );
+  return matchKey ? platformCatalog[matchKey] : undefined;
+};
+
 const buildPlatformUrl = (platform, params) => {
-  const entry = platformCatalog[platform];
+  const entry = resolvePlatformEntry(platform);
   const fallback = `https://www.google.com/search?q=${encodeURIComponent(`${platform} ${params.city} alojamiento`)}`;
   if (!entry || typeof entry.buildUrl !== 'function') {
     return fallback;
@@ -306,7 +319,7 @@ const buildPlatformUrl = (platform, params) => {
   }
 };
 
-const getPlatformLogo = (platform) => platformCatalog[platform]?.logo ?? 'https://logo.clearbit.com/google.com';
+const getPlatformLogo = (platform) => resolvePlatformEntry(platform)?.logo ?? 'https://logo.clearbit.com/google.com';
 
 const toggleOverlay = (isVisible, city) => {
   if (!overlay) return;
@@ -320,7 +333,7 @@ const toggleOverlay = (isVisible, city) => {
   }
 };
 
-const renderListings = (items, searchParams = {}) => {
+const renderFallbackListings = (items, searchParams = {}) => {
   if (!items.length) {
     resultsContainer.innerHTML = '<p class="muted">No encontramos resultados con esos filtros. Intenta con otra ciudad, capacidad o tipo de alojamiento.</p>';
     return;
@@ -391,7 +404,125 @@ const renderListings = (items, searchParams = {}) => {
   resultsContainer.appendChild(fragment);
 };
 
-searchForm.addEventListener('submit', (event) => {
+const formatRealtimePrice = (option) => {
+  if (option.priceDisplay) return option.priceDisplay;
+  if (typeof option.priceAmount === 'number') return formatCurrency(option.priceAmount);
+  return 'Ver detalle';
+};
+
+const renderRealtimeResults = (items, searchParams = {}, fallbackItems = []) => {
+  if (!items.length) {
+    const fallbackSource = fallbackItems.length ? fallbackItems : listings;
+    renderFallbackListings(fallbackSource, searchParams);
+    renderError('No encontramos resultados en tiempo real para tu búsqueda. Mostramos sugerencias aproximadas.');
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  items.forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'result-card';
+
+    const bookingOptions = item.bookingOptions || [];
+    const priceCandidates = bookingOptions
+      .map((option) => (typeof option.priceAmount === 'number' ? option.priceAmount : Number.POSITIVE_INFINITY))
+      .filter((value) => Number.isFinite(value));
+    const minPrice = priceCandidates.length ? Math.min(...priceCandidates) : null;
+    const stayDates = formatDateRange(searchParams.checkIn, searchParams.checkOut);
+
+    card.innerHTML = `
+      <div class="result-card__header">
+        <div>
+          <h3>${item.name}</h3>
+          <div class="result-card__meta">
+            ${item.address ? `<span>${item.address}</span>` : ''}
+            ${item.rating ? `<span>⭐ ${item.rating} (${item.reviews || 'sin reseñas'})</span>` : ''}
+          </div>
+          ${stayDates ? `<p class="result-card__dates">Fechas seleccionadas: <strong>${stayDates}</strong> · ${searchParams.guests || 1} huésped${(searchParams.guests || 1) > 1 ? 'es' : ''}</p>` : ''}
+        </div>
+        ${item.thumbnail ? `<img class="result-card__thumb" src="${item.thumbnail}" alt="${item.name}" loading="lazy" />` : ''}
+      </div>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Buscador</th>
+            <th>Precio estimado</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bookingOptions
+            .map((comparison) => {
+              const link = comparison.link
+                ? comparison.link
+                : buildPlatformUrl(comparison.platform, {
+                    city: searchParams.city || item.name,
+                    checkIn: searchParams.checkIn,
+                    checkOut: searchParams.checkOut,
+                    guests: searchParams.guests
+                  });
+              const logo = getPlatformLogo(comparison.platform);
+              const isBest =
+                minPrice !== null && typeof comparison.priceAmount === 'number' && comparison.priceAmount === minPrice;
+
+              return `
+                <tr class="${isBest ? 'best-price' : ''}">
+                  <td>
+                    <a class="platform-link" href="${link}" target="_blank" rel="noopener noreferrer">
+                      <img class="platform-logo" src="${logo}" alt="${comparison.platform}" loading="lazy" />
+                      <span>${comparison.platform}</span>
+                    </a>
+                  </td>
+                  <td>${formatRealtimePrice(comparison)}</td>
+                </tr>
+              `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+      ${minPrice !== null ? `<p class="muted">Mejor precio estimado: <strong>${formatCurrency(minPrice)}</strong></p>` : ''}
+    `;
+
+    fragment.appendChild(card);
+  });
+
+  resultsContainer.innerHTML = '';
+  resultsContainer.appendChild(fragment);
+};
+
+const fetchRealtimeResults = async (params) => {
+  const query = new URLSearchParams();
+  query.set('city', params.city);
+  if (params.checkIn) query.set('checkIn', params.checkIn);
+  if (params.checkOut) query.set('checkOut', params.checkOut);
+  if (params.guests) query.set('guests', String(params.guests));
+
+  const response = await fetch(`/api/search?${query.toString()}`, {
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMessage = data?.error || 'No se pudo completar la consulta en tiempo real.';
+    throw new Error(errorMessage);
+  }
+
+  return data.results || [];
+};
+
+const renderError = (message) => {
+  resultsContainer.querySelectorAll('.error').forEach((node) => node.remove());
+  const paragraph = document.createElement('p');
+  paragraph.className = 'muted error';
+  paragraph.textContent = message;
+
+  resultsContainer.prepend(paragraph);
+};
+
+searchForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const rawCity = event.target.city.value.trim();
@@ -425,23 +556,47 @@ searchForm.addEventListener('submit', (event) => {
 
   toggleOverlay(true, displayCity);
 
-  window.setTimeout(() => {
-    toggleOverlay(false);
-    renderListings(filtered, {
+  try {
+    const realtime = await fetchRealtimeResults({
       city: rawCity,
       guests,
       checkIn,
       checkOut
     });
-  }, 1200);
+
+    toggleOverlay(false);
+
+    if (realtime.length) {
+      renderRealtimeResults(
+        realtime,
+        {
+          city: rawCity,
+          guests,
+          checkIn,
+          checkOut
+        },
+        filtered
+      );
+    } else {
+      renderFallbackListings(filtered, {
+        city: rawCity,
+        guests,
+        checkIn,
+        checkOut
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    toggleOverlay(false);
+    renderFallbackListings(filtered, {
+      city: rawCity,
+      guests,
+      checkIn,
+      checkOut
+    });
+    renderError('No pudimos conectar con los buscadores en tiempo real. Te mostramos referencias aproximadas.');
+  }
 });
 
-const initialCheckIn = checkInInput ? checkInInput.value : '';
-const initialCheckOut = checkOutInput ? checkOutInput.value : '';
-
-renderListings(listings.slice(0, 3), {
-  city: '',
-  guests: 2,
-  checkIn: initialCheckIn,
-  checkOut: initialCheckOut
-});
+resultsContainer.innerHTML =
+  '<p class="muted">Introduce tu destino y fechas para consultar a los principales portales en tiempo real.</p>';
