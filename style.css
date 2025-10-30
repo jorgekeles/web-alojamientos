@@ -90,6 +90,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  position: relative;
 }
 
 .field--full {
@@ -119,6 +120,48 @@ main {
 
 .field small {
   color: var(--color-muted);
+}
+
+.autocomplete {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  background: var(--color-light);
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px -18px rgba(15, 27, 97, 0.6);
+  overflow: hidden;
+  z-index: 5;
+}
+
+.autocomplete[hidden] {
+  display: none;
+}
+
+.autocomplete__option {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(208, 213, 221, 0.6);
+  font: inherit;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.2s ease;
+}
+
+.autocomplete__option:last-child {
+  border-bottom: none;
+}
+
+.autocomplete__option:hover,
+.autocomplete__option:focus,
+.autocomplete__option.is-active {
+  background: rgba(255, 112, 67, 0.08);
+  outline: none;
 }
 
 .btn {

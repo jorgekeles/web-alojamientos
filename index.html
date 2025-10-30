@@ -24,7 +24,8 @@
       <form class="search__form" id="searchForm">
         <label class="field">
           <span>Ciudad</span>
-          <input type="text" id="city" name="city" placeholder="Ej. Madrid" required />
+          <input type="text" id="city" name="city" placeholder="Ej. Madrid" required autocomplete="off" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="citySuggestions" />
+          <div class="autocomplete" id="citySuggestions" role="listbox" aria-label="Sugerencias de ciudades" hidden></div>
         </label>
 
         <label class="field">
