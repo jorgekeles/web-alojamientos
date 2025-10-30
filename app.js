@@ -260,6 +260,80 @@ const listings = [
   ])
 ];
 
+const fallbackTemplateCatalog = {
+  hotel: {
+    basePrice: 142,
+    capacity: 2,
+    extraGuestIncrement: 18,
+    platforms: ['Booking.com', 'Airbnb', 'Expedia', 'Agoda', 'TripAdvisor', 'Trivago', 'Google Travel', 'Hostelworld'],
+    label: (city) => `Hotel destacado en ${city}`
+  },
+  departamento: {
+    basePrice: 118,
+    capacity: 4,
+    extraGuestIncrement: 15,
+    platforms: ['Airbnb', 'Booking.com', 'Vrbo', 'Spotahome', 'TripAdvisor', 'Google Travel', 'Couchsurfing', 'Expedia'],
+    label: (city) => `Departamento céntrico en ${city}`
+  },
+  casa: {
+    basePrice: 236,
+    capacity: 6,
+    extraGuestIncrement: 22,
+    platforms: ['Airbnb', 'Booking.com', 'Vrbo', 'TripAdvisor', 'Google Travel', 'Spotahome', 'misterb&b', 'Couchsurfing'],
+    label: (city) => `Casa completa en ${city}`
+  },
+  'cabaña': {
+    basePrice: 168,
+    capacity: 5,
+    extraGuestIncrement: 19,
+    platforms: ['Airbnb', 'Booking.com', 'Expedia', 'Vrbo', 'TripAdvisor', 'Trivago', 'Google Travel', 'Spotahome'],
+    label: (city) => `Cabaña acogedora en ${city}`
+  }
+};
+
+const defaultFallbackOrder = Object.keys(fallbackTemplateCatalog);
+
+const generateGenericFallbackListings = ({ city, guests = 1, types = [] }) => {
+  const normalizedCity = city?.trim() ? city.trim() : 'tu destino';
+  const requestedTypes = types.length ? types : defaultFallbackOrder;
+  const uniqueTypes = Array.from(new Set(requestedTypes.length ? requestedTypes : defaultFallbackOrder));
+
+  const listingsForCity = uniqueTypes
+    .map((type) => {
+      const template = fallbackTemplateCatalog[type] || fallbackTemplateCatalog.hotel;
+      const capacity = Math.max(template.capacity, guests || 1);
+      const extraGuests = Math.max(0, (guests || 1) - template.capacity);
+      const price = template.basePrice + extraGuests * template.extraGuestIncrement;
+      const labelFactory = template.label || ((cityName) => `${formatTypeLabel(type)} destacado en ${cityName}`);
+
+      return createListing(
+        normalizedCity,
+        type,
+        capacity,
+        labelFactory(normalizedCity),
+        price,
+        template.platforms
+      );
+    })
+    .filter(Boolean);
+
+  if (listingsForCity.length) {
+    return listingsForCity;
+  }
+
+  return defaultFallbackOrder.map((type) => {
+    const template = fallbackTemplateCatalog[type];
+    return createListing(
+      normalizedCity,
+      type,
+      Math.max(template.capacity, guests || 1),
+      template.label(normalizedCity),
+      template.basePrice,
+      template.platforms
+    );
+  });
+};
+
 const normalizeText = (value) =>
   value
     ? value
@@ -871,13 +945,16 @@ searchForm.addEventListener('submit', async (event) => {
     return;
   }
 
-  const filtered = listings.filter((listing) => {
+  let filtered = listings.filter((listing) => {
     const matchesCity = listing.city.toLowerCase().includes(city);
     const matchesGuests = listing.capacity >= guests;
     const matchesType = selectedTypes.length ? selectedTypes.includes(listing.type) : true;
 
     return matchesCity && matchesGuests && matchesType;
   });
+  if (!filtered.length) {
+    filtered = generateGenericFallbackListings({ city: rawCity, guests, types: selectedTypes });
+  }
   const displayCity = rawCity || 'tu destino';
 
   toggleOverlay(true, displayCity);
