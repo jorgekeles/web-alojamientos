@@ -254,6 +254,19 @@ const listings = [
   ])
 ];
 
+const normalizeText = (value) =>
+  value
+    ? value
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+    : '';
+
+const cityNames = Array.from(new Set(listings.map((listing) => listing.city))).sort((a, b) =>
+  a.localeCompare(b, 'es', { sensitivity: 'base' })
+);
+
 const searchForm = document.getElementById('searchForm');
 const resultsContainer = document.getElementById('resultsContainer');
 const yearElement = document.getElementById('year');
@@ -261,6 +274,158 @@ const overlay = document.getElementById('searchOverlay');
 const overlayCity = document.getElementById('overlayCity');
 const checkInInput = document.getElementById('checkIn');
 const checkOutInput = document.getElementById('checkOut');
+const cityInput = document.getElementById('city');
+const citySuggestions = document.getElementById('citySuggestions');
+
+let activeCitySuggestion = -1;
+
+const updateCitySuggestionsActiveDescendant = (options) => {
+  if (!cityInput) return;
+  if (activeCitySuggestion >= 0 && options[activeCitySuggestion]) {
+    const optionId = options[activeCitySuggestion].id;
+    if (optionId) {
+      cityInput.setAttribute('aria-activedescendant', optionId);
+    }
+  } else {
+    cityInput.removeAttribute('aria-activedescendant');
+  }
+};
+
+const hideCitySuggestions = () => {
+  if (!citySuggestions || !cityInput) return;
+  citySuggestions.hidden = true;
+  citySuggestions.innerHTML = '';
+  cityInput.setAttribute('aria-expanded', 'false');
+  cityInput.removeAttribute('aria-activedescendant');
+  activeCitySuggestion = -1;
+};
+
+const showCitySuggestions = (items) => {
+  if (!citySuggestions || !cityInput) return;
+  if (!items.length) {
+    hideCitySuggestions();
+    return;
+  }
+
+  citySuggestions.innerHTML = '';
+
+  items.forEach((city, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'autocomplete__option';
+    option.textContent = city;
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', 'false');
+    option.dataset.value = city;
+    option.id = `citySuggestion-${index}`;
+    citySuggestions.appendChild(option);
+  });
+
+  citySuggestions.hidden = false;
+  cityInput.setAttribute('aria-expanded', 'true');
+  activeCitySuggestion = -1;
+};
+
+const updateActiveCitySuggestion = (nextIndex) => {
+  if (!citySuggestions) return;
+  const options = Array.from(citySuggestions.querySelectorAll('.autocomplete__option'));
+
+  if (!options.length) return;
+
+  if (nextIndex < 0) {
+    nextIndex = options.length - 1;
+  } else if (nextIndex >= options.length) {
+    nextIndex = 0;
+  }
+
+  options.forEach((option, optionIndex) => {
+    if (optionIndex === nextIndex) {
+      option.classList.add('is-active');
+      option.setAttribute('aria-selected', 'true');
+    } else {
+      option.classList.remove('is-active');
+      option.setAttribute('aria-selected', 'false');
+    }
+  });
+
+  activeCitySuggestion = nextIndex;
+  updateCitySuggestionsActiveDescendant(options);
+};
+
+const selectCitySuggestion = (value) => {
+  if (!cityInput) return;
+  cityInput.value = value;
+  cityInput.dispatchEvent(new Event('change', { bubbles: true }));
+  hideCitySuggestions();
+};
+
+const filterCitySuggestions = (query) => {
+  const normalizedQuery = normalizeText(query.trim());
+  const results = !normalizedQuery
+    ? cityNames.slice(0, 6)
+    : cityNames.filter((city) => normalizeText(city).includes(normalizedQuery)).slice(0, 6);
+
+  showCitySuggestions(results);
+};
+
+if (cityInput && citySuggestions) {
+  cityInput.addEventListener('input', (event) => {
+    filterCitySuggestions(event.target.value);
+  });
+
+  cityInput.addEventListener('focus', () => {
+    filterCitySuggestions(cityInput.value);
+  });
+
+  cityInput.addEventListener('blur', () => {
+    window.requestAnimationFrame(() => {
+      const activeElement = document.activeElement;
+      if (activeElement && citySuggestions.contains(activeElement)) return;
+      hideCitySuggestions();
+    });
+  });
+
+  cityInput.addEventListener('keydown', (event) => {
+    if (citySuggestions.hidden) return;
+    const options = Array.from(citySuggestions.querySelectorAll('.autocomplete__option'));
+    if (!options.length) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        updateActiveCitySuggestion(activeCitySuggestion + 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        updateActiveCitySuggestion(activeCitySuggestion - 1);
+        break;
+      case 'Enter':
+        if (activeCitySuggestion >= 0 && options[activeCitySuggestion]) {
+          event.preventDefault();
+          selectCitySuggestion(options[activeCitySuggestion].dataset.value || options[activeCitySuggestion].textContent);
+        }
+        break;
+      case 'Escape':
+        hideCitySuggestions();
+        break;
+      default:
+        break;
+    }
+  });
+
+  citySuggestions.addEventListener('mousedown', (event) => {
+    const option = event.target.closest('.autocomplete__option');
+    if (!option) return;
+    event.preventDefault();
+    selectCitySuggestion(option.dataset.value || option.textContent);
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target === cityInput || citySuggestions.contains(event.target)) return;
+    hideCitySuggestions();
+  });
+
+}
 
 yearElement.textContent = new Date().getFullYear();
 
