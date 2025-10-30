@@ -267,6 +267,11 @@ const cityNames = Array.from(new Set(listings.map((listing) => listing.city))).s
   a.localeCompare(b, 'es', { sensitivity: 'base' })
 );
 
+const remoteCitySuggestionCache = new Map();
+let citySuggestionAbortController = null;
+let citySuggestionRequestId = 0;
+let citySuggestionDebounceId = null;
+
 const searchForm = document.getElementById('searchForm');
 const resultsContainer = document.getElementById('resultsContainer');
 const yearElement = document.getElementById('year');
@@ -278,6 +283,70 @@ const cityInput = document.getElementById('city');
 const citySuggestions = document.getElementById('citySuggestions');
 
 let activeCitySuggestion = -1;
+
+const setCitySuggestionsBusy = (isBusy) => {
+  if (!cityInput) return;
+  if (isBusy) {
+    cityInput.setAttribute('aria-busy', 'true');
+  } else {
+    cityInput.removeAttribute('aria-busy');
+  }
+};
+
+const formatRemoteCitySuggestion = (entry) => {
+  if (!entry?.name) return null;
+  const parts = [entry.name];
+
+  const normalizedName = normalizeText(entry.name);
+  const normalizedAdmin = normalizeText(entry.admin1);
+
+  if (entry.admin1 && normalizedAdmin && normalizedAdmin !== normalizedName) {
+    parts.push(entry.admin1);
+  }
+
+  if (entry.country) {
+    parts.push(entry.country);
+  } else if (entry.country_code) {
+    parts.push(entry.country_code);
+  }
+
+  const label = parts.filter(Boolean).join(', ');
+  return label || null;
+};
+
+const fetchRemoteCitySuggestions = async (query, signal) => {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const cacheKey = normalizeText(trimmed);
+  if (remoteCitySuggestionCache.has(cacheKey)) {
+    return remoteCitySuggestionCache.get(cacheKey);
+  }
+
+  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+  url.searchParams.set('name', trimmed);
+  url.searchParams.set('count', '6');
+  url.searchParams.set('language', 'es');
+
+  const response = await fetch(url.toString(), { signal });
+
+  if (!response.ok) {
+    throw new Error(`No se pudieron obtener sugerencias (estado ${response.status}).`);
+  }
+
+  const payload = await response.json();
+  const seen = new Set();
+  const suggestions = (payload.results || [])
+    .map((entry) => formatRemoteCitySuggestion(entry))
+    .filter((value) => {
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+
+  remoteCitySuggestionCache.set(cacheKey, suggestions);
+  return suggestions;
+};
 
 const updateCitySuggestionsActiveDescendant = (options) => {
   if (!cityInput) return;
@@ -298,6 +367,11 @@ const hideCitySuggestions = () => {
   cityInput.setAttribute('aria-expanded', 'false');
   cityInput.removeAttribute('aria-activedescendant');
   activeCitySuggestion = -1;
+  if (citySuggestionAbortController) {
+    citySuggestionAbortController.abort();
+    citySuggestionAbortController = null;
+  }
+  setCitySuggestionsBusy(false);
 };
 
 const showCitySuggestions = (items) => {
@@ -360,17 +434,86 @@ const selectCitySuggestion = (value) => {
 };
 
 const filterCitySuggestions = (query) => {
-  const normalizedQuery = normalizeText(query.trim());
-  const results = !normalizedQuery
+  if (!cityInput || !citySuggestions) return;
+
+  const trimmed = query.trim();
+  const normalizedQuery = normalizeText(trimmed);
+
+  const localResults = !normalizedQuery
     ? cityNames.slice(0, 6)
     : cityNames.filter((city) => normalizeText(city).includes(normalizedQuery)).slice(0, 6);
 
-  showCitySuggestions(results);
+  if (localResults.length) {
+    showCitySuggestions(localResults);
+  } else if (!trimmed) {
+    hideCitySuggestions();
+  }
+
+  if (!trimmed) {
+    if (citySuggestionAbortController) {
+      citySuggestionAbortController.abort();
+      citySuggestionAbortController = null;
+    }
+    setCitySuggestionsBusy(false);
+    return;
+  }
+
+  const cacheKey = normalizedQuery;
+  if (remoteCitySuggestionCache.has(cacheKey)) {
+    const cached = remoteCitySuggestionCache.get(cacheKey);
+    if (cached.length) {
+      showCitySuggestions(cached);
+    } else if (!localResults.length) {
+      hideCitySuggestions();
+    }
+    return;
+  }
+
+  if (citySuggestionAbortController) {
+    citySuggestionAbortController.abort();
+  }
+
+  const controller = new AbortController();
+  citySuggestionAbortController = controller;
+  const { signal } = controller;
+  const requestId = ++citySuggestionRequestId;
+
+  setCitySuggestionsBusy(true);
+
+  fetchRemoteCitySuggestions(trimmed, signal)
+    .then((remoteResults) => {
+      if (requestId !== citySuggestionRequestId) return;
+      remoteCitySuggestionCache.set(cacheKey, remoteResults);
+      if (remoteResults.length) {
+        showCitySuggestions(remoteResults);
+      } else if (!localResults.length) {
+        hideCitySuggestions();
+      }
+    })
+    .catch((error) => {
+      if (error.name === 'AbortError') return;
+      console.error('No se pudieron obtener sugerencias de ciudades:', error);
+      if (requestId !== citySuggestionRequestId) return;
+      if (!localResults.length) {
+        hideCitySuggestions();
+      }
+    })
+    .finally(() => {
+      if (requestId === citySuggestionRequestId) {
+        setCitySuggestionsBusy(false);
+      }
+      if (citySuggestionAbortController === controller) {
+        citySuggestionAbortController = null;
+      }
+    });
 };
 
 if (cityInput && citySuggestions) {
   cityInput.addEventListener('input', (event) => {
-    filterCitySuggestions(event.target.value);
+    window.clearTimeout(citySuggestionDebounceId);
+    citySuggestionDebounceId = window.setTimeout(() => {
+      filterCitySuggestions(event.target.value);
+    }, 200);
   });
 
   cityInput.addEventListener('focus', () => {
