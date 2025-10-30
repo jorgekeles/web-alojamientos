@@ -143,6 +143,12 @@ const createComparisons = (basePrice, platforms) =>
     price: Math.max(Math.round(basePrice + (priceAdjustments[platform] ?? 0)), Math.round(basePrice * 0.45))
   }));
 
+const formatTypeLabel = (value) => {
+  if (!value) return '';
+  const stringValue = value.toString();
+  return stringValue.charAt(0).toUpperCase() + stringValue.slice(1);
+};
+
 const createListing = (city, type, capacity, name, basePrice, platforms) => ({
   city,
   type,
@@ -662,10 +668,13 @@ const renderFallbackListings = (items, searchParams = {}) => {
       <div>
         <h3>${item.name}</h3>
         <div class="result-card__meta">
-          <span class="badge">${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</span>
+          <span class="badge">${formatTypeLabel(item.type)}</span>
           <span>${item.city}</span>
           <span>Hasta ${item.capacity} personas</span>
         </div>
+        ${searchParams.types?.length ? `<div class="result-card__preferences" aria-label="Tipo preferido">${searchParams.types
+            .map((type) => `<span class="badge badge--ghost">${formatTypeLabel(type)}</span>`)
+            .join('')}</div>` : ''}
         ${stayDates ? `<p class="result-card__dates">Fechas sugeridas: <strong>${stayDates}</strong> · ${guests} huésped${guests > 1 ? 'es' : ''}</p>` : ''}
       </div>
       <table class="comparison-table">
@@ -738,15 +747,23 @@ const renderRealtimeResults = (items, searchParams = {}, fallbackItems = []) => 
       .filter((value) => Number.isFinite(value));
     const minPrice = priceCandidates.length ? Math.min(...priceCandidates) : null;
     const stayDates = formatDateRange(searchParams.checkIn, searchParams.checkOut);
+    const detectedType = item.type ? `<span class="badge">${formatTypeLabel(item.type)}</span>` : '';
+    const preferredTypes = searchParams.types?.length
+      ? `<div class="result-card__preferences" aria-label="Tipos solicitados">${searchParams.types
+          .map((type) => `<span class="badge badge--ghost">${formatTypeLabel(type)}</span>`)
+          .join('')}</div>`
+      : '';
 
     card.innerHTML = `
       <div class="result-card__header">
         <div>
           <h3>${item.name}</h3>
           <div class="result-card__meta">
+            ${detectedType}
             ${item.address ? `<span>${item.address}</span>` : ''}
             ${item.rating ? `<span>⭐ ${item.rating} (${item.reviews || 'sin reseñas'})</span>` : ''}
           </div>
+          ${preferredTypes}
           ${stayDates ? `<p class="result-card__dates">Fechas seleccionadas: <strong>${stayDates}</strong> · ${searchParams.guests || 1} huésped${(searchParams.guests || 1) > 1 ? 'es' : ''}</p>` : ''}
         </div>
         ${item.thumbnail ? `<img class="result-card__thumb" src="${item.thumbnail}" alt="${item.name}" loading="lazy" />` : ''}
@@ -804,6 +821,7 @@ const fetchRealtimeResults = async (params) => {
   if (params.checkIn) query.set('checkIn', params.checkIn);
   if (params.checkOut) query.set('checkOut', params.checkOut);
   if (params.guests) query.set('guests', String(params.guests));
+  if (params.types?.length) query.set('types', params.types.join(','));
 
   const response = await fetch(`/api/search?${query.toString()}`, {
     headers: {
@@ -869,7 +887,8 @@ searchForm.addEventListener('submit', async (event) => {
       city: rawCity,
       guests,
       checkIn,
-      checkOut
+      checkOut,
+      types: selectedTypes
     });
 
     toggleOverlay(false);
@@ -881,7 +900,8 @@ searchForm.addEventListener('submit', async (event) => {
           city: rawCity,
           guests,
           checkIn,
-          checkOut
+          checkOut,
+          types: selectedTypes
         },
         filtered
       );
@@ -890,7 +910,8 @@ searchForm.addEventListener('submit', async (event) => {
         city: rawCity,
         guests,
         checkIn,
-        checkOut
+        checkOut,
+        types: selectedTypes
       });
     }
   } catch (error) {
@@ -900,7 +921,8 @@ searchForm.addEventListener('submit', async (event) => {
       city: rawCity,
       guests,
       checkIn,
-      checkOut
+      checkOut,
+      types: selectedTypes
     });
     renderError('No pudimos conectar con los buscadores en tiempo real. Te mostramos referencias aproximadas.');
   }

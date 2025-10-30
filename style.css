@@ -370,6 +370,19 @@ main {
   border-radius: 999px;
 }
 
+.badge--ghost {
+  color: var(--color-dark);
+  background: rgba(15, 27, 97, 0.08);
+  border: 1px solid rgba(15, 27, 97, 0.12);
+}
+
+.result-card__preferences {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .muted {
   color: var(--color-muted);
 }
