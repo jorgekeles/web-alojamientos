@@ -347,6 +347,34 @@ const cityNames = Array.from(new Set(listings.map((listing) => listing.city))).s
   a.localeCompare(b, 'es', { sensitivity: 'base' })
 );
 
+
+const airportsByCity = {
+  Madrid: [
+    { code: 'MAD', name: 'Adolfo Suárez Madrid-Barajas' }
+  ],
+  Barcelona: [
+    { code: 'BCN', name: 'Barcelona-El Prat' },
+    { code: 'GRO', name: 'Girona-Costa Brava' },
+    { code: 'REU', name: 'Reus' }
+  ],
+  'Buenos Aires': [
+    { code: 'EZE', name: 'Ministro Pistarini (Ezeiza)' },
+    { code: 'AEP', name: 'Jorge Newbery (Aeroparque)' }
+  ],
+  'Ciudad de México': [
+    { code: 'MEX', name: 'Aeropuerto Internacional Benito Juárez' },
+    { code: 'NLU', name: 'Felipe Ángeles (AIFA)' }
+  ]
+};
+
+const defaultAirportOptions = [
+  { code: 'MAD', name: 'Adolfo Suárez Madrid-Barajas' },
+  { code: 'BCN', name: 'Barcelona-El Prat' },
+  { code: 'EZE', name: 'Ministro Pistarini (Ezeiza)' },
+  { code: 'AEP', name: 'Jorge Newbery (Aeroparque)' },
+  { code: 'MEX', name: 'Aeropuerto Internacional Benito Juárez' }
+];
+
 const remoteCitySuggestionCache = new Map();
 let citySuggestionAbortController = null;
 let citySuggestionRequestId = 0;
@@ -361,6 +389,7 @@ const checkInInput = document.getElementById('checkIn');
 const checkOutInput = document.getElementById('checkOut');
 const cityInput = document.getElementById('city');
 const citySuggestions = document.getElementById('citySuggestions');
+const originInput = document.getElementById('origin');
 const tripDaysInput = document.getElementById('tripDays');
 const plannerPreview = document.getElementById('plannerPreview');
 const typesField = document.getElementById('types')?.closest('.field');
@@ -512,6 +541,7 @@ const updateActiveCitySuggestion = (nextIndex) => {
 const selectCitySuggestion = (value) => {
   if (!cityInput) return;
   cityInput.value = value;
+  setOriginAirportOptions(value);
   cityInput.dispatchEvent(new Event('change', { bubbles: true }));
   hideCitySuggestions();
 };
@@ -591,6 +621,41 @@ const filterCitySuggestions = (query) => {
     });
 };
 
+
+const getAirportOptionsByCity = (city) => {
+  const normalizedCity = normalizeText(city);
+  if (!normalizedCity) return [];
+
+  const cityKey = Object.keys(airportsByCity).find((name) => normalizeText(name) === normalizedCity);
+  return cityKey ? airportsByCity[cityKey] : [];
+};
+
+const setOriginAirportOptions = (city) => {
+  if (!originInput) return;
+
+  const airportOptions = getAirportOptionsByCity(city);
+  const optionsToRender = airportOptions.length ? airportOptions : defaultAirportOptions;
+
+  originInput.innerHTML = '';
+
+  const placeholderOption = document.createElement('option');
+  placeholderOption.value = '';
+  placeholderOption.textContent = airportOptions.length
+    ? 'Selecciona aeropuerto de origen'
+    : 'Sin coincidencias exactas: elige un aeropuerto sugerido';
+  originInput.appendChild(placeholderOption);
+
+  optionsToRender.forEach((airport) => {
+    const option = document.createElement('option');
+    option.value = airport.code;
+    option.textContent = `${airport.name} (${airport.code})`;
+    originInput.appendChild(option);
+  });
+
+  originInput.disabled = false;
+  originInput.value = '';
+};
+
 if (cityInput && citySuggestions) {
   cityInput.addEventListener('input', (event) => {
     window.clearTimeout(citySuggestionDebounceId);
@@ -656,6 +721,21 @@ if (cityInput && citySuggestions) {
 yearElement.textContent = new Date().getFullYear();
 
 const formatInputDate = (date) => date.toISOString().split('T')[0];
+
+
+if (cityInput && originInput) {
+  cityInput.addEventListener('change', () => {
+    setOriginAirportOptions(cityInput.value);
+  });
+
+  cityInput.addEventListener('blur', () => {
+    setOriginAirportOptions(cityInput.value);
+  });
+
+  if (cityInput.value.trim()) {
+    setOriginAirportOptions(cityInput.value);
+  }
+}
 
 const calculateTripDays = (checkIn, checkOut) => {
   if (!checkIn || !checkOut) return 1;
@@ -1055,8 +1135,6 @@ const fetchFlightResults = async (params) => {
         : '';
     const hint = data?.hint ? ` Sugerencia: ${data.hint}` : '';
     throw new Error(`${baseMessage}${detail}${hint}`);
-    const detail = data?.details ? ` Detalle: ${data.details}` : '';
-    throw new Error(`${data?.error || 'No se pudo completar la búsqueda de vuelos.'}${detail}`);
   }
 
   return data || {};
@@ -1074,17 +1152,6 @@ const buildGoogleFlightsFallbackUrl = ({ city, origin, checkIn, checkOut, adults
   return `https://www.google.com/travel/flights?${query.toString()}`;
 };
 
-const buildGoogleFlightsFallbackUrl = ({ city, origin, checkIn, checkOut, adults, children }) => {
-  const query = new URLSearchParams({ hl: 'es' });
-  if (origin) query.set('f', origin);
-  if (city) query.set('t', city);
-  if (checkIn) query.set('d', checkIn);
-  if (checkOut) query.set('r', checkOut);
-  query.set('ad', String(Math.max(1, Number(adults) || 1)));
-  const kids = Math.max(0, Number(children) || 0);
-  if (kids > 0) query.set('ch', String(kids));
-  return `https://www.google.com/travel/flights?${query.toString()}`;
-};
 
 const fetchRealtimeResults = async (params) => {
   const query = new URLSearchParams();
@@ -1296,12 +1363,6 @@ searchForm.addEventListener('submit', async (event) => {
     resultsContainer.appendChild(fallbackLink);
 
     updateTripPlanSummaryLive();
-    renderError(error?.message || 'No pudimos conectar con Google Flights en tiempo real.');
-
-    const fallbackLink = document.createElement('p');
-    fallbackLink.className = 'muted error';
-    fallbackLink.innerHTML = `Puedes continuar en <a href="${buildGoogleFlightsFallbackUrl({ city: rawCity, origin, checkIn, checkOut, adults, children })}" target="_blank" rel="noopener noreferrer">Google Flights</a> con estos filtros.`;
-    resultsContainer.prepend(fallbackLink);
   }
 });
 

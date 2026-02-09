@@ -68,9 +68,11 @@
         </label>
 
         <label class="field">
-          <span>Origen (aeropuerto o ciudad)</span>
-          <input type="text" id="origin" name="origin" placeholder="Ej. Madrid" autocomplete="off" />
-          <small>Se usa para buscar vuelos en Google Flights.</small>
+          <span>Origen (aeropuerto)</span>
+          <select id="origin" name="origin" required disabled>
+            <option value="">Primero elige una ciudad destino</option>
+          </select>
+          <small>Mostramos aeropuertos disponibles según la ciudad elegida.</small>
         </label>
 
         <label class="field">
