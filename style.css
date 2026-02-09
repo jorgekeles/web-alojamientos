@@ -260,6 +260,13 @@ main {
   transform: translateY(-2px);
 }
 
+.btn--inline {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  justify-self: start;
+  text-decoration: none;
+}
+
 .results {
   margin-top: 3.5rem;
   position: relative;
@@ -461,6 +468,18 @@ main {
 
 .trip-plan-card {
   border: 1px solid rgba(15, 27, 97, 0.08);
+}
+
+.flight-card {
+  border: 1px solid rgba(255, 112, 67, 0.25);
+}
+
+.flight-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .trip-plan-list {

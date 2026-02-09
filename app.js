@@ -942,6 +942,111 @@ const renderRealtimeResults = (items, searchParams = {}, fallbackItems = []) => 
   resultsContainer.appendChild(fragment);
 };
 
+
+const formatFlightDateForGoogle = (value) => {
+  if (!value) return '';
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return '';
+  return `${year}-${month}-${day}`;
+};
+
+const buildGoogleFlightsUrl = ({ origin, destination, checkIn, checkOut, adults, children }) => {
+  const query = new URLSearchParams({
+    hl: 'es'
+  });
+
+  if (origin) query.set('f', origin);
+  if (destination) query.set('t', destination);
+  if (checkIn) query.set('d', formatFlightDateForGoogle(checkIn));
+  if (checkOut) query.set('r', formatFlightDateForGoogle(checkOut));
+  if (Number.isFinite(adults)) query.set('ad', String(Math.max(1, adults)));
+  if (Number.isFinite(children) && children > 0) query.set('ch', String(children));
+
+  return `https://www.google.com/travel/flights?${query.toString()}`;
+};
+
+const renderFlightResults = (flightPayload, searchParams = {}) => {
+  const section = document.createElement('article');
+  section.className = 'result-card flight-card';
+
+  const bestPrice = typeof flightPayload.bestPrice === 'number' ? formatCurrency(flightPayload.bestPrice) : null;
+  const flights = Array.isArray(flightPayload.flights) ? flightPayload.flights : [];
+  const googleFlightsUrl =
+    flightPayload.googleFlightsUrl ||
+    buildGoogleFlightsUrl({
+      origin: searchParams.origin,
+      destination: searchParams.city,
+      checkIn: searchParams.checkIn,
+      checkOut: searchParams.checkOut,
+      adults: searchParams.adults,
+      children: searchParams.children
+    });
+
+  section.innerHTML = `
+    <div class="flight-card__header">
+      <h3>Vuelos en Google Flights</h3>
+      <a class="btn btn--inline" href="${googleFlightsUrl}" target="_blank" rel="noopener noreferrer">Abrir en Google Flights</a>
+    </div>
+    <p class="result-card__dates">Ruta: <strong>${searchParams.origin || 'Origen pendiente'} → ${searchParams.city || 'Destino pendiente'}</strong> · ${formatDateRange(searchParams.checkIn, searchParams.checkOut)}</p>
+    <p class="muted">Pasajeros: ${searchParams.adults || 1} adulto(s)${searchParams.children ? `, ${searchParams.children} niño(s)` : ''}${bestPrice ? ` · Mejor precio: ${bestPrice}` : ''}</p>
+    ${
+      flights.length
+        ? `<table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Aerolínea / Trayecto</th>
+                <th>Duración</th>
+                <th>Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${flights
+                .map(
+                  (flight) => `
+                    <tr>
+                      <td>
+                        <strong>${flight.airline || 'Vuelo disponible'}</strong>
+                        <div class="muted">${flight.route || 'Revisa el detalle en Google Flights'}</div>
+                      </td>
+                      <td>${flight.duration || 'N/D'}</td>
+                      <td>${flight.priceDisplay || (typeof flight.priceAmount === 'number' ? formatCurrency(flight.priceAmount) : 'Ver detalle')}</td>
+                    </tr>
+                  `
+                )
+                .join('')}
+            </tbody>
+          </table>`
+        : '<p class="muted">No pudimos extraer vuelos detallados, pero abrimos la búsqueda en Google Flights con tus filtros.</p>'
+    }
+  `;
+
+  resultsContainer.appendChild(section);
+};
+
+const fetchFlightResults = async (params) => {
+  const query = new URLSearchParams();
+  query.set('destination', params.city);
+  if (params.origin) query.set('origin', params.origin);
+  if (params.checkIn) query.set('departureDate', params.checkIn);
+  if (params.checkOut) query.set('returnDate', params.checkOut);
+  if (params.adults) query.set('adults', String(params.adults));
+  if (Number.isFinite(params.children)) query.set('children', String(params.children));
+
+  const response = await fetch(`/api/flights?${query.toString()}`, {
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'No se pudo completar la búsqueda de vuelos.');
+  }
+
+  return data;
+};
+
 const fetchRealtimeResults = async (params) => {
   const query = new URLSearchParams();
   query.set('city', params.city);
@@ -1020,6 +1125,7 @@ searchForm.addEventListener('submit', async (event) => {
   const rawCity = event.target.city.value.trim();
   const city = rawCity.toLowerCase();
   const adults = Number(event.target.adults.value);
+  const origin = event.target.origin?.value?.trim() || '';
   const children = Number(event.target.children.value);
   const guests = adults + children;
   const selectedTypes = Array.from(event.target.types.selectedOptions).map((option) => option.value);
@@ -1066,20 +1172,51 @@ searchForm.addEventListener('submit', async (event) => {
   toggleOverlay(true, displayCity);
 
   try {
-    const realtime = await fetchRealtimeResults({
-      city: rawCity,
-      guests,
-      checkIn,
-      checkOut,
-      types: selectedTypes
-    });
+    const shouldFetchHotels = planningFields.includes('hospedaje');
+    const shouldFetchFlights = planningFields.includes('vuelos');
+
+    const [realtime, flightResults] = await Promise.all([
+      shouldFetchHotels
+        ? fetchRealtimeResults({
+            city: rawCity,
+            guests,
+            checkIn,
+            checkOut,
+            types: selectedTypes
+          })
+        : Promise.resolve([]),
+      shouldFetchFlights
+        ? fetchFlightResults({
+            city: rawCity,
+            origin,
+            checkIn,
+            checkOut,
+            adults,
+            children
+          })
+        : Promise.resolve(null)
+    ]);
 
     toggleOverlay(false);
 
-    if (realtime.length) {
-      renderRealtimeResults(
-        realtime,
-        {
+    if (shouldFetchHotels) {
+      if (realtime.length) {
+        renderRealtimeResults(
+          realtime,
+          {
+            city: rawCity,
+            guests,
+            adults,
+            children,
+            tripDays,
+            checkIn,
+            checkOut,
+            types: selectedTypes
+          },
+          filtered
+        );
+      } else {
+        renderFallbackListings(filtered, {
           city: rawCity,
           guests,
           adults,
@@ -1088,39 +1225,32 @@ searchForm.addEventListener('submit', async (event) => {
           checkIn,
           checkOut,
           types: selectedTypes
-        },
-        filtered
-      );
-      renderTripPlanSummary({
-        city: rawCity,
-        adults,
-        children,
-        tripDays,
-        planningFields,
-        checkIn,
-        checkOut
-      });
+        });
+      }
     } else {
-      renderFallbackListings(filtered, {
+      resultsContainer.innerHTML = '';
+    }
+
+    if (shouldFetchFlights && flightResults) {
+      renderFlightResults(flightResults, {
         city: rawCity,
-        guests,
+        origin,
         adults,
         children,
-        tripDays,
-        checkIn,
-        checkOut,
-        types: selectedTypes
-      });
-      renderTripPlanSummary({
-        city: rawCity,
-        adults,
-        children,
-        tripDays,
-        planningFields,
         checkIn,
         checkOut
       });
     }
+
+    renderTripPlanSummary({
+      city: rawCity,
+      adults,
+      children,
+      tripDays,
+      planningFields,
+      checkIn,
+      checkOut
+    });
   } catch (error) {
     console.error(error);
     toggleOverlay(false);

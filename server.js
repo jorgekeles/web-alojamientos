@@ -136,6 +136,82 @@ const matchesPreferredTypes = (hotel, preferredTypes = []) => {
   });
 };
 
+
+const buildGoogleFlightsExternalUrl = ({ origin, destination, departureDate, returnDate, adults, children }) => {
+  const params = new URLSearchParams({ hl: 'es' });
+  if (origin) params.set('f', origin);
+  if (destination) params.set('t', destination);
+  if (departureDate) params.set('d', departureDate);
+  if (returnDate) params.set('r', returnDate);
+  params.set('ad', String(Math.max(1, Number(adults) || 1)));
+  const kids = Math.max(0, Number(children) || 0);
+  if (kids > 0) params.set('ch', String(kids));
+  return `https://www.google.com/travel/flights?${params.toString()}`;
+};
+
+const buildFlightsSerpApiUrl = ({ origin, destination, departureDate, returnDate, adults, children }) => {
+  const params = new URLSearchParams({
+    engine: 'google_flights',
+    hl: 'es',
+    gl: 'es',
+    currency: 'USD',
+    departure_id: origin || '',
+    arrival_id: destination,
+    outbound_date: departureDate,
+    api_key: SERPAPI_KEY
+  });
+
+  if (returnDate) params.set('return_date', returnDate);
+  params.set('adults', String(Math.max(1, Number(adults) || 1)));
+  const kids = Math.max(0, Number(children) || 0);
+  if (kids > 0) params.set('children', String(kids));
+
+  return `${SERPAPI_BASE_URL}?${params.toString()}`;
+};
+
+const mapFlightResult = (flight) => {
+  const flights = Array.isArray(flight.flights) ? flight.flights : [];
+  const firstLeg = flights[0] || {};
+  const lastLeg = flights[flights.length - 1] || {};
+  const airline = firstLeg.airline || flight.airline || null;
+  const route = firstLeg.departure_airport?.id && lastLeg.arrival_airport?.id
+    ? `${firstLeg.departure_airport.id} → ${lastLeg.arrival_airport.id}`
+    : null;
+
+  return {
+    airline,
+    route,
+    duration: flight.total_duration || flight.duration || null,
+    priceDisplay: flight.price ? `$${flight.price}` : null,
+    priceAmount: Number.isFinite(Number(flight.price)) ? Number(flight.price) : null
+  };
+};
+
+const fetchFlightResults = async (searchParams) => {
+  const url = buildFlightsSerpApiUrl(searchParams);
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`SerpAPI (vuelos) respondió con estado ${response.status}: ${errorText}`);
+  }
+
+  const payload = await response.json();
+  const outbound = Array.isArray(payload.best_flights) ? payload.best_flights : [];
+  const alternatives = Array.isArray(payload.other_flights) ? payload.other_flights : [];
+
+  const flights = [...outbound, ...alternatives].slice(0, 8).map(mapFlightResult);
+  const numericPrices = flights
+    .map((flight) => flight.priceAmount)
+    .filter((value) => Number.isFinite(value));
+
+  return {
+    flights,
+    bestPrice: numericPrices.length ? Math.min(...numericPrices) : null,
+    googleFlightsUrl: buildGoogleFlightsExternalUrl(searchParams)
+  };
+};
+
 const fetchHotelResults = async (searchParams) => {
   const url = buildSerpApiUrl(searchParams);
   const response = await fetch(url);
@@ -162,6 +238,52 @@ const fetchHotelResults = async (searchParams) => {
 
   return hotels.filter((hotel) => hotel.bookingOptions.length > 0);
 };
+
+
+app.get('/api/flights', async (req, res) => {
+  if (!SERPAPI_KEY) {
+    return res.status(500).json({
+      error: 'Falta la clave de SERPAPI. Define la variable de entorno SERPAPI_KEY antes de iniciar el servidor.'
+    });
+  }
+
+  const { origin, destination, departureDate, returnDate, adults, children } = req.query;
+
+  if (!destination) {
+    return res.status(400).json({ error: 'El parámetro "destination" es obligatorio.' });
+  }
+
+  if (!departureDate) {
+    return res.status(400).json({ error: 'El parámetro "departureDate" es obligatorio.' });
+  }
+
+  try {
+    const results = await fetchFlightResults({
+      origin,
+      destination,
+      departureDate,
+      returnDate,
+      adults,
+      children
+    });
+
+    return res.json({
+      ...results,
+      destination,
+      origin: origin || null,
+      departureDate,
+      returnDate: returnDate || null,
+      adults: Math.max(1, Number(adults) || 1),
+      children: Math.max(0, Number(children) || 0)
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(502).json({
+      error: 'No se pudieron obtener vuelos en tiempo real desde Google Flights.',
+      details: error.message
+    });
+  }
+});
 
 app.get('/api/search', async (req, res) => {
   if (!SERPAPI_KEY) {
