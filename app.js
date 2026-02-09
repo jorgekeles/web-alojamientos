@@ -698,7 +698,7 @@ const syncPlannerPreview = () => {
   `;
 
   if (typesField) {
-    typesField.style.display = planningFields.includes('hospedaje') ? '' : 'none';
+    typesField.style.display = 'none';
   }
 };
 
@@ -1084,7 +1084,7 @@ const renderTripPlanSummary = ({ city, adults, children, tripDays, planningField
   const summaryCard = document.createElement('article');
   summaryCard.className = 'result-card trip-plan-card';
   const totalTravelers = adults + children;
-  const selectedPlanning = planningFields.length ? planningFields : ['hospedaje'];
+  const selectedPlanning = planningFields.length ? planningFields : ['vuelos'];
 
   summaryCard.innerHTML = `
     <div>
@@ -1209,65 +1209,21 @@ searchForm.addEventListener('submit', async (event) => {
   toggleOverlay(true, displayCity);
 
   try {
-    const shouldFetchHotels = planningFields.includes('hospedaje');
     const shouldFetchFlights = planningFields.includes('vuelos');
 
-    const [realtime, flightResults] = await Promise.all([
-      shouldFetchHotels
-        ? fetchRealtimeResults({
-            city: rawCity,
-            guests,
-            checkIn,
-            checkOut,
-            types: selectedTypes
-          })
-        : Promise.resolve([]),
-      shouldFetchFlights
-        ? fetchFlightResults({
-            city: rawCity,
-            origin,
-            checkIn,
-            checkOut,
-            adults,
-            children
-          })
-        : Promise.resolve(null)
-    ]);
+    const flightResults = shouldFetchFlights
+      ? await fetchFlightResults({
+          city: rawCity,
+          origin,
+          checkIn,
+          checkOut,
+          adults,
+          children
+        })
+      : null;
 
     toggleOverlay(false);
     resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
-
-    if (shouldFetchHotels) {
-      if (realtime.length) {
-        renderRealtimeResults(
-          realtime,
-          {
-            city: rawCity,
-            guests,
-            adults,
-            children,
-            tripDays,
-            checkIn,
-            checkOut,
-            types: selectedTypes
-          },
-          filtered
-        );
-      } else {
-        renderFallbackListings(filtered, {
-          city: rawCity,
-          guests,
-          adults,
-          children,
-          tripDays,
-          checkIn,
-          checkOut,
-          types: selectedTypes
-        });
-      }
-    } else {
-      resultsContainer.innerHTML = '';
-    }
 
     if (shouldFetchFlights && flightResults) {
       renderFlightResults(flightResults, {
@@ -1292,18 +1248,6 @@ searchForm.addEventListener('submit', async (event) => {
   } catch (error) {
     console.error(error);
     toggleOverlay(false);
-    renderFallbackListings(filtered, {
-      city: rawCity,
-      origin,
-      adults,
-      children,
-      checkIn,
-      checkOut
-    });
-    updateTripPlanSummaryLive();
-  } catch (error) {
-    console.error(error);
-    toggleOverlay(false);
     resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
     renderError('No pudimos conectar con Google Flights en tiempo real.');
     updateTripPlanSummaryLive();
@@ -1311,6 +1255,6 @@ searchForm.addEventListener('submit', async (event) => {
 });
 
 resultsContainer.innerHTML =
-  '<p class="muted">Completa el formulario para ver tu resumen en vivo y buscar vuelos en tiempo real.</p>';
+  '<p class="muted">Completa el formulario para ver tu resumen y resultados reales de vuelos.</p>';
 
 updateTripPlanSummaryLive();

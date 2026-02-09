@@ -13,8 +13,8 @@
   <header class="hero">
     <div class="hero__overlay"></div>
     <div class="hero__content">
-      <h1>Planifica tu viaje completo en un solo lugar</h1>
-      <p>Define pasajeros, fechas y servicios del viaje (vuelos + hospedaje + duración) antes de comparar precios en tiempo real.</p>
+      <h1>Planifica tus vuelos en un solo lugar</h1>
+      <p>Define pasajeros, fechas y ciudad destino para consultar Google Flights en tiempo real.</p>
     </div>
   </header>
 
@@ -35,7 +35,7 @@
       <article class="planner-step">
         <span class="planner-step__number">3</span>
         <h3>Elige servicios</h3>
-        <p>Selecciona si planificas vuelos, hospedaje o ambos.</p>
+        <p>Por ahora mostramos resultados de vuelos. El módulo de hospedaje quedará como próximo paso.</p>
       </article>
     </section>
 
@@ -51,8 +51,8 @@
               <span>Vuelos</span>
             </label>
             <label class="planning-option">
-              <input type="checkbox" name="planningFields" value="hospedaje" checked />
-              <span>Hospedaje</span>
+              <input type="checkbox" name="planningFields" value="hospedaje" disabled />
+              <span>Hospedaje (próximamente)</span>
             </label>
             <label class="planning-option">
               <input type="checkbox" name="planningFields" value="dias" checked />
@@ -70,7 +70,7 @@
         <label class="field">
           <span>Origen (aeropuerto o ciudad)</span>
           <input type="text" id="origin" name="origin" placeholder="Ej. Madrid" autocomplete="off" />
-          <small>Se usa para buscar vuelos en Google Flights cuando seleccionas la opción "Vuelos".</small>
+          <small>Se usa para buscar vuelos en Google Flights.</small>
         </label>
 
         <label class="field">
@@ -99,7 +99,7 @@
           <small>Se calcula automáticamente según las fechas.</small>
         </label>
 
-        <label class="field field--full">
+        <label class="field field--full" style="display: none;">
           <span>Tipo de alojamiento</span>
           <select id="types" name="types" multiple size="4" aria-label="Selecciona uno o varios tipos de alojamiento">
             <option value="hotel">Hotel</option>
@@ -107,7 +107,7 @@
             <option value="departamento">Departamento</option>
             <option value="casa">Casa</option>
           </select>
-          <small>Puedes seleccionar varias opciones manteniendo presionada la tecla Ctrl (Cmd en Mac).</small>
+          <small>Este filtro se habilitará cuando activemos la comparación de hospedajes.</small>
         </label>
 
         <button type="submit" class="btn">Buscar</button>
@@ -135,7 +135,7 @@
       </div>
       <div class="feature">
         <h3>Filtros inteligentes</h3>
-        <p>Ajusta tu búsqueda por ciudad, capacidad y tipo de alojamiento para encontrar la opción perfecta.</p>
+        <p>Completa origen, destino y fechas para ver opciones reales de vuelo al instante.</p>
       </div>
       <div class="feature">
         <h3>Listo para GitHub Pages</h3>
