@@ -22,6 +22,24 @@
     <section class="search" id="buscador">
       <h2>Busca y compara</h2>
       <form class="search__form" id="searchForm">
+        <label class="field field--full">
+          <span>¿Qué quieres planificar?</span>
+          <div class="planning-options" role="group" aria-label="Selecciona los servicios del viaje">
+            <label class="planning-option">
+              <input type="checkbox" name="planningFields" value="vuelos" checked />
+              <span>Vuelos</span>
+            </label>
+            <label class="planning-option">
+              <input type="checkbox" name="planningFields" value="hospedaje" checked />
+              <span>Hospedaje</span>
+            </label>
+            <label class="planning-option">
+              <input type="checkbox" name="planningFields" value="dias" checked />
+              <span>Días de viaje</span>
+            </label>
+          </div>
+        </label>
+
         <label class="field">
           <span>Ciudad</span>
           <input type="text" id="city" name="city" placeholder="Ej. Madrid" required autocomplete="off" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="citySuggestions" />
@@ -39,8 +57,19 @@
         </label>
 
         <label class="field">
-          <span>Cantidad de personas</span>
-          <input type="number" id="guests" name="guests" min="1" max="12" value="2" required />
+          <span>Adultos</span>
+          <input type="number" id="adults" name="adults" min="1" max="12" value="2" required />
+        </label>
+
+        <label class="field">
+          <span>Niños</span>
+          <input type="number" id="children" name="children" min="0" max="12" value="0" required />
+        </label>
+
+        <label class="field">
+          <span>Días de viaje</span>
+          <input type="number" id="tripDays" name="tripDays" min="1" value="3" readonly />
+          <small>Se calcula automáticamente según las fechas.</small>
         </label>
 
         <label class="field field--full">

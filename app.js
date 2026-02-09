@@ -361,6 +361,7 @@ const checkInInput = document.getElementById('checkIn');
 const checkOutInput = document.getElementById('checkOut');
 const cityInput = document.getElementById('city');
 const citySuggestions = document.getElementById('citySuggestions');
+const tripDaysInput = document.getElementById('tripDays');
 
 let activeCitySuggestion = -1;
 
@@ -654,6 +655,20 @@ yearElement.textContent = new Date().getFullYear();
 
 const formatInputDate = (date) => date.toISOString().split('T')[0];
 
+const calculateTripDays = (checkIn, checkOut) => {
+  if (!checkIn || !checkOut) return 1;
+  const start = new Date(checkIn);
+  const end = new Date(checkOut);
+  const diff = end - start;
+  if (!Number.isFinite(diff) || diff <= 0) return 1;
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+};
+
+const syncTripDays = () => {
+  if (!tripDaysInput || !checkInInput || !checkOutInput) return;
+  tripDaysInput.value = String(calculateTripDays(checkInInput.value, checkOutInput.value));
+};
+
 if (checkInInput && checkOutInput) {
   const today = new Date();
   const defaultCheckIn = new Date(today);
@@ -662,6 +677,9 @@ if (checkInInput && checkOutInput) {
   defaultCheckOut.setDate(defaultCheckOut.getDate() + 10);
   checkInInput.value = formatInputDate(defaultCheckIn);
   checkOutInput.value = formatInputDate(defaultCheckOut);
+  syncTripDays();
+  checkInInput.addEventListener('change', syncTripDays);
+  checkOutInput.addEventListener('change', syncTripDays);
 }
 
 const formatCurrency = (value) =>
@@ -922,15 +940,58 @@ const renderError = (message) => {
   resultsContainer.prepend(paragraph);
 };
 
+const renderTripPlanSummary = ({ city, adults, children, tripDays, planningFields, checkIn, checkOut }) => {
+  const summaryCard = document.createElement('article');
+  summaryCard.className = 'result-card trip-plan-card';
+  const totalTravelers = adults + children;
+  const selectedPlanning = planningFields.length ? planningFields : ['hospedaje'];
+
+  summaryCard.innerHTML = `
+    <div>
+      <h3>Tu plan de viaje</h3>
+      <div class="result-card__meta">
+        <span>${city || 'Destino a definir'}</span>
+        <span>${totalTravelers} integrante${totalTravelers === 1 ? '' : 's'}</span>
+        <span>${tripDays} día${tripDays === 1 ? '' : 's'}</span>
+      </div>
+      <p class="result-card__dates">Fechas: <strong>${formatDateRange(checkIn, checkOut) || 'pendientes'}</strong></p>
+      <div class="result-card__preferences" aria-label="Campos de planificación">
+        ${selectedPlanning.map((field) => `<span class="badge badge--ghost">${formatTypeLabel(field)}</span>`).join('')}
+      </div>
+    </div>
+    <ul class="trip-plan-list">
+      <li>Adultos: <strong>${adults}</strong></li>
+      <li>Niños: <strong>${children}</strong></li>
+      <li>Servicios elegidos: <strong>${selectedPlanning.join(', ')}</strong></li>
+    </ul>
+  `;
+
+  resultsContainer.prepend(summaryCard);
+};
+
 searchForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const rawCity = event.target.city.value.trim();
   const city = rawCity.toLowerCase();
-  const guests = Number(event.target.guests.value);
+  const adults = Number(event.target.adults.value);
+  const children = Number(event.target.children.value);
+  const guests = adults + children;
   const selectedTypes = Array.from(event.target.types.selectedOptions).map((option) => option.value);
+  const planningFields = Array.from(event.target.querySelectorAll('input[name="planningFields"]:checked')).map((input) => input.value);
   const checkIn = event.target.checkIn.value;
   const checkOut = event.target.checkOut.value;
+  const tripDays = calculateTripDays(checkIn, checkOut);
+
+  if (!planningFields.length) {
+    resultsContainer.innerHTML = '<p class="muted error">Selecciona al menos un campo para planificar el viaje (vuelos, hospedaje o días).</p>';
+    return;
+  }
+
+  if (!Number.isFinite(adults) || adults < 1) {
+    resultsContainer.innerHTML = '<p class="muted error">Debe haber al menos 1 adulto en el viaje.</p>';
+    return;
+  }
 
   if (!checkIn || !checkOut) {
     resultsContainer.innerHTML = '<p class="muted error">Por favor selecciona fechas de check-in y check-out.</p>';
@@ -976,19 +1037,43 @@ searchForm.addEventListener('submit', async (event) => {
         {
           city: rawCity,
           guests,
+          adults,
+          children,
+          tripDays,
           checkIn,
           checkOut,
           types: selectedTypes
         },
         filtered
       );
+      renderTripPlanSummary({
+        city: rawCity,
+        adults,
+        children,
+        tripDays,
+        planningFields,
+        checkIn,
+        checkOut
+      });
     } else {
       renderFallbackListings(filtered, {
         city: rawCity,
         guests,
+        adults,
+        children,
+        tripDays,
         checkIn,
         checkOut,
         types: selectedTypes
+      });
+      renderTripPlanSummary({
+        city: rawCity,
+        adults,
+        children,
+        tripDays,
+        planningFields,
+        checkIn,
+        checkOut
       });
     }
   } catch (error) {
@@ -997,9 +1082,21 @@ searchForm.addEventListener('submit', async (event) => {
     renderFallbackListings(filtered, {
       city: rawCity,
       guests,
+      adults,
+      children,
+      tripDays,
       checkIn,
       checkOut,
       types: selectedTypes
+    });
+    renderTripPlanSummary({
+      city: rawCity,
+      adults,
+      children,
+      tripDays,
+      planningFields,
+      checkIn,
+      checkOut
     });
     renderError('No pudimos conectar con los buscadores en tiempo real. Te mostramos referencias aproximadas.');
   }
