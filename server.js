@@ -30,6 +30,43 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const normalizeFlightLocation = (value) => {
+  if (!value) return '';
+  return String(value)
+    .split(',')[0]
+    .trim();
+};
+
+const classifyFlightsError = (details = '') => {
+  const text = String(details || '').toLowerCase();
+
+  if (text.includes('invalid api key') || text.includes('invalid key')) {
+    return {
+      reason: 'invalid_api_key',
+      hint: 'Verifica que SERPAPI_KEY sea válida y pertenezca a tu cuenta de SerpAPI.'
+    };
+  }
+
+  if (text.includes('searches left') || text.includes('exceeded') || text.includes('limit') || text.includes('quota')) {
+    return {
+      reason: 'quota_exceeded',
+      hint: 'Tu cuenta de SerpAPI parece sin saldo/cuota. Revisa el panel de uso y plan.'
+    };
+  }
+
+  if (text.includes('429')) {
+    return {
+      reason: 'rate_limited',
+      hint: 'SerpAPI está limitando solicitudes temporalmente. Intenta nuevamente en unos minutos.'
+    };
+  }
+
+  return {
+    reason: 'upstream_error',
+    hint: 'Revisa la configuración de SERPAPI_KEY y la conectividad de red del servidor.'
+  };
+};
+
 const parsePrice = (value) => {
   if (!value) return null;
   const normalized = String(value).replace(/[,\s]/g, '');
@@ -150,17 +187,20 @@ const buildGoogleFlightsExternalUrl = ({ origin, destination, departureDate, ret
 };
 
 const buildFlightsSerpApiUrl = ({ origin, destination, departureDate, returnDate, adults, children }) => {
+  const normalizedOrigin = normalizeFlightLocation(origin);
+  const normalizedDestination = normalizeFlightLocation(destination);
+
   const params = new URLSearchParams({
     engine: 'google_flights',
     hl: 'es',
     gl: 'es',
     currency: 'USD',
-    departure_id: origin || '',
-    arrival_id: destination,
+    arrival_id: normalizedDestination,
     outbound_date: departureDate,
     api_key: SERPAPI_KEY
   });
 
+  if (normalizedOrigin) params.set('departure_id', normalizedOrigin);
   if (returnDate) params.set('return_date', returnDate);
   params.set('adults', String(Math.max(1, Number(adults) || 1)));
   const kids = Math.max(0, Number(children) || 0);
@@ -243,13 +283,15 @@ const fetchHotelResults = async (searchParams) => {
 app.get('/api/flights', async (req, res) => {
   if (!SERPAPI_KEY) {
     return res.status(500).json({
-      error: 'Falta la clave de SERPAPI. Define la variable de entorno SERPAPI_KEY antes de iniciar el servidor.'
+      error: 'Falta la clave de SERPAPI. Define la variable de entorno SERPAPI_KEY antes de iniciar el servidor.',
+      details: 'Configura SERPAPI_KEY en un archivo .env en la raíz y reinicia el servidor.'
     });
   }
 
   const { origin, destination, departureDate, returnDate, adults, children } = req.query;
+  const normalizedDestination = normalizeFlightLocation(destination);
 
-  if (!destination) {
+  if (!normalizedDestination) {
     return res.status(400).json({ error: 'El parámetro "destination" es obligatorio.' });
   }
 
@@ -260,7 +302,7 @@ app.get('/api/flights', async (req, res) => {
   try {
     const results = await fetchFlightResults({
       origin,
-      destination,
+      destination: normalizedDestination,
       departureDate,
       returnDate,
       adults,
@@ -269,7 +311,7 @@ app.get('/api/flights', async (req, res) => {
 
     return res.json({
       ...results,
-      destination,
+      destination: normalizedDestination,
       origin: origin || null,
       departureDate,
       returnDate: returnDate || null,
@@ -278,9 +320,12 @@ app.get('/api/flights', async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    const diagnostics = classifyFlightsError(error?.message);
     return res.status(502).json({
       error: 'No se pudieron obtener vuelos en tiempo real desde Google Flights.',
-      details: error.message
+      details: error.message,
+      reason: diagnostics.reason,
+      hint: diagnostics.hint
     });
   }
 });
@@ -318,6 +363,17 @@ app.get('/api/search', async (req, res) => {
       details: error.message
     });
   }
+});
+
+app.get('/api/flights/diagnostics', (req, res) => {
+  const hasApiKey = Boolean(SERPAPI_KEY);
+  return res.json({
+    ok: hasApiKey,
+    hasApiKey,
+    message: hasApiKey
+      ? 'SERPAPI_KEY configurada. Si falla la búsqueda, revisa cuota o validez de la clave.'
+      : 'Falta SERPAPI_KEY. Configura .env y reinicia el servidor.'
+  });
 });
 
 app.use(express.static(__dirname));
