@@ -1038,14 +1038,40 @@ const fetchFlightResults = async (params) => {
     }
   });
 
-  const data = await response.json();
+  const rawBody = await response.text();
+  let data = null;
+  try {
+    data = rawBody ? JSON.parse(rawBody) : null;
+  } catch (parseError) {
+    data = null;
+  }
 
   if (!response.ok) {
+    const baseMessage = data?.error || `No se pudo completar la búsqueda de vuelos (HTTP ${response.status}).`;
+    const detail = data?.details
+      ? ` Detalle: ${data.details}`
+      : rawBody
+        ? ` Detalle: ${rawBody.slice(0, 280)}`
+        : '';
+    const hint = data?.hint ? ` Sugerencia: ${data.hint}` : '';
+    throw new Error(`${baseMessage}${detail}${hint}`);
     const detail = data?.details ? ` Detalle: ${data.details}` : '';
     throw new Error(`${data?.error || 'No se pudo completar la búsqueda de vuelos.'}${detail}`);
   }
 
-  return data;
+  return data || {};
+};
+
+const buildGoogleFlightsFallbackUrl = ({ city, origin, checkIn, checkOut, adults, children }) => {
+  const query = new URLSearchParams({ hl: 'es' });
+  if (origin) query.set('f', origin);
+  if (city) query.set('t', city);
+  if (checkIn) query.set('d', checkIn);
+  if (checkOut) query.set('r', checkOut);
+  query.set('ad', String(Math.max(1, Number(adults) || 1)));
+  const kids = Math.max(0, Number(children) || 0);
+  if (kids > 0) query.set('ch', String(kids));
+  return `https://www.google.com/travel/flights?${query.toString()}`;
 };
 
 const buildGoogleFlightsFallbackUrl = ({ city, origin, checkIn, checkOut, adults, children }) => {
@@ -1270,6 +1296,12 @@ searchForm.addEventListener('submit', async (event) => {
     resultsContainer.appendChild(fallbackLink);
 
     updateTripPlanSummaryLive();
+    renderError(error?.message || 'No pudimos conectar con Google Flights en tiempo real.');
+
+    const fallbackLink = document.createElement('p');
+    fallbackLink.className = 'muted error';
+    fallbackLink.innerHTML = `Puedes continuar en <a href="${buildGoogleFlightsFallbackUrl({ city: rawCity, origin, checkIn, checkOut, adults, children })}" target="_blank" rel="noopener noreferrer">Google Flights</a> con estos filtros.`;
+    resultsContainer.prepend(fallbackLink);
   }
 });
 

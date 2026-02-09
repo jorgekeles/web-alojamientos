@@ -37,6 +37,36 @@ const normalizeFlightLocation = (value) => {
     .trim();
 };
 
+const classifyFlightsError = (details = '') => {
+  const text = String(details || '').toLowerCase();
+
+  if (text.includes('invalid api key') || text.includes('invalid key')) {
+    return {
+      reason: 'invalid_api_key',
+      hint: 'Verifica que SERPAPI_KEY sea válida y pertenezca a tu cuenta de SerpAPI.'
+    };
+  }
+
+  if (text.includes('searches left') || text.includes('exceeded') || text.includes('limit') || text.includes('quota')) {
+    return {
+      reason: 'quota_exceeded',
+      hint: 'Tu cuenta de SerpAPI parece sin saldo/cuota. Revisa el panel de uso y plan.'
+    };
+  }
+
+  if (text.includes('429')) {
+    return {
+      reason: 'rate_limited',
+      hint: 'SerpAPI está limitando solicitudes temporalmente. Intenta nuevamente en unos minutos.'
+    };
+  }
+
+  return {
+    reason: 'upstream_error',
+    hint: 'Revisa la configuración de SERPAPI_KEY y la conectividad de red del servidor.'
+  };
+};
+
 const parsePrice = (value) => {
   if (!value) return null;
   const normalized = String(value).replace(/[,\s]/g, '');
@@ -290,9 +320,12 @@ app.get('/api/flights', async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    const diagnostics = classifyFlightsError(error?.message);
     return res.status(502).json({
       error: 'No se pudieron obtener vuelos en tiempo real desde Google Flights.',
-      details: error.message
+      details: error.message,
+      reason: diagnostics.reason,
+      hint: diagnostics.hint
     });
   }
 });
@@ -330,6 +363,17 @@ app.get('/api/search', async (req, res) => {
       details: error.message
     });
   }
+});
+
+app.get('/api/flights/diagnostics', (req, res) => {
+  const hasApiKey = Boolean(SERPAPI_KEY);
+  return res.json({
+    ok: hasApiKey,
+    hasApiKey,
+    message: hasApiKey
+      ? 'SERPAPI_KEY configurada. Si falla la búsqueda, revisa cuota o validez de la clave.'
+      : 'Falta SERPAPI_KEY. Configura .env y reinicia el servidor.'
+  });
 });
 
 app.use(express.static(__dirname));
