@@ -13,15 +13,36 @@
   <header class="hero">
     <div class="hero__overlay"></div>
     <div class="hero__content">
-      <h1>Encuentra tu alojamiento ideal al mejor precio</h1>
-      <p>Compara hoteles, cabañas, departamentos y casas entre los principales buscadores con datos en tiempo real.</p>
+      <h1>Planifica tu viaje completo en un solo lugar</h1>
+      <p>Define pasajeros, fechas y servicios del viaje (vuelos + hospedaje + duración) antes de comparar precios en tiempo real.</p>
     </div>
   </header>
 
   <main>
+
+
+    <section class="planner-intro" aria-label="Pasos para planificar tu viaje">
+      <article class="planner-step">
+        <span class="planner-step__number">1</span>
+        <h3>Arma tu grupo</h3>
+        <p>Indica cuántos adultos y niños viajarán.</p>
+      </article>
+      <article class="planner-step">
+        <span class="planner-step__number">2</span>
+        <h3>Define fechas</h3>
+        <p>Calculamos automáticamente los días totales del viaje.</p>
+      </article>
+      <article class="planner-step">
+        <span class="planner-step__number">3</span>
+        <h3>Elige servicios</h3>
+        <p>Selecciona si planificas vuelos, hospedaje o ambos.</p>
+      </article>
+    </section>
+
     <section class="search" id="buscador">
       <h2>Busca y compara</h2>
       <form class="search__form" id="searchForm">
+        <div class="planner-preview field--full" id="plannerPreview" aria-live="polite"></div>
         <label class="field field--full">
           <span>¿Qué quieres planificar?</span>
           <div class="planning-options" role="group" aria-label="Selecciona los servicios del viaje">

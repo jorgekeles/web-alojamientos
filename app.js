@@ -362,6 +362,8 @@ const checkOutInput = document.getElementById('checkOut');
 const cityInput = document.getElementById('city');
 const citySuggestions = document.getElementById('citySuggestions');
 const tripDaysInput = document.getElementById('tripDays');
+const plannerPreview = document.getElementById('plannerPreview');
+const typesField = document.getElementById('types')?.closest('.field');
 
 let activeCitySuggestion = -1;
 
@@ -669,6 +671,37 @@ const syncTripDays = () => {
   tripDaysInput.value = String(calculateTripDays(checkInInput.value, checkOutInput.value));
 };
 
+
+const formatPlanningLabel = (value) => {
+  const labels = {
+    vuelos: 'Vuelos',
+    hospedaje: 'Hospedaje',
+    dias: 'Días'
+  };
+  return labels[value] || formatTypeLabel(value);
+};
+
+const getSelectedPlanningFields = () =>
+  Array.from(searchForm.querySelectorAll('input[name="planningFields"]:checked')).map((input) => input.value);
+
+const syncPlannerPreview = () => {
+  if (!plannerPreview || !searchForm) return;
+  const adults = Number(searchForm.adults?.value || 0);
+  const children = Number(searchForm.children?.value || 0);
+  const total = adults + children;
+  const tripDays = calculateTripDays(checkInInput?.value, checkOutInput?.value);
+  const planningFields = getSelectedPlanningFields();
+
+  plannerPreview.innerHTML = `
+    <div>Plan actual: <strong>${total || 0} viajero${total === 1 ? '' : 's'}</strong> · <strong>${tripDays} día${tripDays === 1 ? '' : 's'}</strong></div>
+    <div class="planner-preview__chips">${planningFields.map((field) => `<span class="badge badge--ghost">${formatPlanningLabel(field)}</span>`).join('')}</div>
+  `;
+
+  if (typesField) {
+    typesField.style.display = planningFields.includes('hospedaje') ? '' : 'none';
+  }
+};
+
 if (checkInInput && checkOutInput) {
   const today = new Date();
   const defaultCheckIn = new Date(today);
@@ -680,6 +713,8 @@ if (checkInInput && checkOutInput) {
   syncTripDays();
   checkInInput.addEventListener('change', syncTripDays);
   checkOutInput.addEventListener('change', syncTripDays);
+  checkInInput.addEventListener('change', syncPlannerPreview);
+  checkOutInput.addEventListener('change', syncPlannerPreview);
 }
 
 const formatCurrency = (value) =>
@@ -969,6 +1004,16 @@ const renderTripPlanSummary = ({ city, adults, children, tripDays, planningField
   resultsContainer.prepend(summaryCard);
 };
 
+
+if (searchForm) {
+  searchForm.addEventListener('input', (event) => {
+    if (event.target.matches('input[name="planningFields"], #adults, #children, #checkIn, #checkOut')) {
+      syncPlannerPreview();
+    }
+  });
+  syncPlannerPreview();
+}
+
 searchForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
@@ -978,7 +1023,7 @@ searchForm.addEventListener('submit', async (event) => {
   const children = Number(event.target.children.value);
   const guests = adults + children;
   const selectedTypes = Array.from(event.target.types.selectedOptions).map((option) => option.value);
-  const planningFields = Array.from(event.target.querySelectorAll('input[name="planningFields"]:checked')).map((input) => input.value);
+  const planningFields = getSelectedPlanningFields();
   const checkIn = event.target.checkIn.value;
   const checkOut = event.target.checkOut.value;
   const tripDays = calculateTripDays(checkIn, checkOut);
