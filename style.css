@@ -66,6 +66,62 @@ main {
   max-width: 1100px;
 }
 
+
+.planner-intro {
+  margin: 1.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.planner-step {
+  background: linear-gradient(160deg, rgba(15, 27, 97, 0.08), rgba(255, 112, 67, 0.1));
+  border: 1px solid rgba(15, 27, 97, 0.12);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
+.planner-step h3 {
+  color: var(--color-secondary);
+  margin-bottom: 0.35rem;
+  font-size: 1.05rem;
+}
+
+.planner-step p {
+  color: var(--color-muted);
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.planner-step__number {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--color-secondary);
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.planner-preview {
+  grid-column: 1 / -1;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  border: 1px dashed rgba(15, 27, 97, 0.25);
+  background: rgba(15, 27, 97, 0.04);
+  color: var(--color-secondary);
+  font-weight: 600;
+}
+
+.planner-preview__chips {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .search {
   background: var(--color-light);
   border-radius: 24px;
@@ -120,6 +176,26 @@ main {
 
 .field small {
   color: var(--color-muted);
+}
+
+.planning-options {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.planning-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  background: #fff;
+}
+
+.planning-option input {
+  accent-color: var(--color-primary);
 }
 
 .autocomplete {
@@ -381,6 +457,16 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.trip-plan-card {
+  border: 1px solid rgba(15, 27, 97, 0.08);
+}
+
+.trip-plan-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--color-muted);
 }
 
 .muted {
