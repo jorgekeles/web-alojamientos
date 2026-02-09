@@ -1109,43 +1109,88 @@ const renderTripPlanSummary = ({ city, adults, children, tripDays, planningField
   resultsContainer.prepend(summaryCard);
 };
 
+const getCurrentTripPlanData = () => {
+  const city = searchForm?.city?.value?.trim() || '';
+  const adults = Number(searchForm?.adults?.value || 1);
+  const children = Number(searchForm?.children?.value || 0);
+  const checkIn = searchForm?.checkIn?.value || '';
+  const checkOut = searchForm?.checkOut?.value || '';
+  const tripDays = calculateTripDays(checkIn, checkOut);
+  const planningFields = getSelectedPlanningFields();
+
+  return {
+    city,
+    adults: Number.isFinite(adults) && adults > 0 ? adults : 1,
+    children: Number.isFinite(children) && children >= 0 ? children : 0,
+    tripDays,
+    planningFields,
+    checkIn,
+    checkOut
+  };
+};
+
+const updateTripPlanSummaryLive = () => {
+  if (!resultsContainer) return;
+  const liveData = getCurrentTripPlanData();
+  const previousSummary = resultsContainer.querySelector('.trip-plan-card');
+  if (previousSummary) {
+    previousSummary.remove();
+  }
+
+  renderTripPlanSummary(liveData);
+};
+
+
 
 if (searchForm) {
   searchForm.addEventListener('input', (event) => {
-    if (event.target.matches('input[name="planningFields"], #adults, #children, #checkIn, #checkOut')) {
+    if (event.target.matches('input[name="planningFields"], #adults, #children, #checkIn, #checkOut, #city, #origin')) {
       syncPlannerPreview();
+      updateTripPlanSummaryLive();
     }
   });
+
+  searchForm.addEventListener('change', (event) => {
+    if (event.target.matches('input[name="planningFields"], #checkIn, #checkOut, #types')) {
+      syncPlannerPreview();
+      updateTripPlanSummaryLive();
+    }
+  });
+
   syncPlannerPreview();
+  updateTripPlanSummaryLive();
 }
 
 searchForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const rawCity = event.target.city.value.trim();
-  const city = rawCity.toLowerCase();
   const adults = Number(event.target.adults.value);
   const origin = event.target.origin?.value?.trim() || '';
   const children = Number(event.target.children.value);
-  const guests = adults + children;
-  const selectedTypes = Array.from(event.target.types.selectedOptions).map((option) => option.value);
   const planningFields = getSelectedPlanningFields();
   const checkIn = event.target.checkIn.value;
   const checkOut = event.target.checkOut.value;
   const tripDays = calculateTripDays(checkIn, checkOut);
 
   if (!planningFields.length) {
-    resultsContainer.innerHTML = '<p class="muted error">Selecciona al menos un campo para planificar el viaje (vuelos, hospedaje o días).</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Selecciona al menos un campo para planificar el viaje (vuelos, hospedaje o días).');
+    updateTripPlanSummaryLive();
     return;
   }
 
   if (!Number.isFinite(adults) || adults < 1) {
-    resultsContainer.innerHTML = '<p class="muted error">Debe haber al menos 1 adulto en el viaje.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Debe haber al menos 1 adulto en el viaje.');
+    updateTripPlanSummaryLive();
     return;
   }
 
   if (!checkIn || !checkOut) {
-    resultsContainer.innerHTML = '<p class="muted error">Por favor selecciona fechas de check-in y check-out.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Por favor selecciona fechas de check-in y check-out.');
+    updateTripPlanSummaryLive();
     return;
   }
 
@@ -1153,20 +1198,12 @@ searchForm.addEventListener('submit', async (event) => {
   const checkOutDate = new Date(checkOut);
 
   if (checkOutDate <= checkInDate) {
-    resultsContainer.innerHTML = '<p class="muted error">La fecha de check-out debe ser posterior a la de check-in.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('La fecha de check-out debe ser posterior a la de check-in.');
+    updateTripPlanSummaryLive();
     return;
   }
 
-  let filtered = listings.filter((listing) => {
-    const matchesCity = listing.city.toLowerCase().includes(city);
-    const matchesGuests = listing.capacity >= guests;
-    const matchesType = selectedTypes.length ? selectedTypes.includes(listing.type) : true;
-
-    return matchesCity && matchesGuests && matchesType;
-  });
-  if (!filtered.length) {
-    filtered = generateGenericFallbackListings({ city: rawCity, guests, types: selectedTypes });
-  }
   const displayCity = rawCity || 'tu destino';
 
   toggleOverlay(true, displayCity);
@@ -1198,6 +1235,7 @@ searchForm.addEventListener('submit', async (event) => {
     ]);
 
     toggleOverlay(false);
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
 
     if (shouldFetchHotels) {
       if (realtime.length) {
@@ -1256,26 +1294,23 @@ searchForm.addEventListener('submit', async (event) => {
     toggleOverlay(false);
     renderFallbackListings(filtered, {
       city: rawCity,
-      guests,
+      origin,
       adults,
       children,
-      tripDays,
-      checkIn,
-      checkOut,
-      types: selectedTypes
-    });
-    renderTripPlanSummary({
-      city: rawCity,
-      adults,
-      children,
-      tripDays,
-      planningFields,
       checkIn,
       checkOut
     });
-    renderError('No pudimos conectar con los buscadores en tiempo real. Te mostramos referencias aproximadas.');
+    updateTripPlanSummaryLive();
+  } catch (error) {
+    console.error(error);
+    toggleOverlay(false);
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('No pudimos conectar con Google Flights en tiempo real.');
+    updateTripPlanSummaryLive();
   }
 });
 
 resultsContainer.innerHTML =
-  '<p class="muted">Introduce tu destino y fechas para consultar a los principales portales en tiempo real.</p>';
+  '<p class="muted">Completa el formulario para ver tu resumen en vivo y buscar vuelos en tiempo real.</p>';
+
+updateTripPlanSummaryLive();
