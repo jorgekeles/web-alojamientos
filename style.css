@@ -122,6 +122,26 @@ main {
   color: var(--color-muted);
 }
 
+.planning-options {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.planning-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid #d0d5dd;
+  border-radius: 999px;
+  padding: 0.5rem 0.9rem;
+  background: #fff;
+}
+
+.planning-option input {
+  accent-color: var(--color-primary);
+}
+
 .autocomplete {
   position: absolute;
   top: calc(100% + 0.25rem);
@@ -381,6 +401,16 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.trip-plan-card {
+  border: 1px solid rgba(15, 27, 97, 0.08);
+}
+
+.trip-plan-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--color-muted);
 }
 
 .muted {
