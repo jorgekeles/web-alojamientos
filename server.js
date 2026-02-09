@@ -200,7 +200,7 @@ const fetchFlightResults = async (searchParams) => {
   const outbound = Array.isArray(payload.best_flights) ? payload.best_flights : [];
   const alternatives = Array.isArray(payload.other_flights) ? payload.other_flights : [];
 
-  const flights = [...outbound, ...alternatives].slice(0, 10).map(mapFlightResult);
+  const flights = [...outbound, ...alternatives].slice(0, 8).map(mapFlightResult);
   const numericPrices = flights
     .map((flight) => flight.priceAmount)
     .filter((value) => Number.isFinite(value));

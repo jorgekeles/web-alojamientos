@@ -1209,29 +1209,90 @@ searchForm.addEventListener('submit', async (event) => {
   toggleOverlay(true, displayCity);
 
   try {
+    const shouldFetchHotels = planningFields.includes('hospedaje');
     const shouldFetchFlights = planningFields.includes('vuelos');
 
-    if (!shouldFetchFlights) {
-      toggleOverlay(false);
-      resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
-      renderError('Por ahora solo mostramos resultados de vuelos. Activa la opción "Vuelos" para buscar.');
-      updateTripPlanSummaryLive();
-      return;
-    }
-
-    const flightResults = await fetchFlightResults({
-      city: rawCity,
-      origin,
-      checkIn,
-      checkOut,
-      adults,
-      children
-    });
+    const [realtime, flightResults] = await Promise.all([
+      shouldFetchHotels
+        ? fetchRealtimeResults({
+            city: rawCity,
+            guests,
+            checkIn,
+            checkOut,
+            types: selectedTypes
+          })
+        : Promise.resolve([]),
+      shouldFetchFlights
+        ? fetchFlightResults({
+            city: rawCity,
+            origin,
+            checkIn,
+            checkOut,
+            adults,
+            children
+          })
+        : Promise.resolve(null)
+    ]);
 
     toggleOverlay(false);
     resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
 
-    renderFlightResults(flightResults, {
+    if (shouldFetchHotels) {
+      if (realtime.length) {
+        renderRealtimeResults(
+          realtime,
+          {
+            city: rawCity,
+            guests,
+            adults,
+            children,
+            tripDays,
+            checkIn,
+            checkOut,
+            types: selectedTypes
+          },
+          filtered
+        );
+      } else {
+        renderFallbackListings(filtered, {
+          city: rawCity,
+          guests,
+          adults,
+          children,
+          tripDays,
+          checkIn,
+          checkOut,
+          types: selectedTypes
+        });
+      }
+    } else {
+      resultsContainer.innerHTML = '';
+    }
+
+    if (shouldFetchFlights && flightResults) {
+      renderFlightResults(flightResults, {
+        city: rawCity,
+        origin,
+        adults,
+        children,
+        checkIn,
+        checkOut
+      });
+    }
+
+    renderTripPlanSummary({
+      city: rawCity,
+      adults,
+      children,
+      tripDays,
+      planningFields,
+      checkIn,
+      checkOut
+    });
+  } catch (error) {
+    console.error(error);
+    toggleOverlay(false);
+    renderFallbackListings(filtered, {
       city: rawCity,
       origin,
       adults,
