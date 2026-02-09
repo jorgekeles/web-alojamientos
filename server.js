@@ -30,6 +30,13 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+const normalizeFlightLocation = (value) => {
+  if (!value) return '';
+  return String(value)
+    .split(',')[0]
+    .trim();
+};
+
 const parsePrice = (value) => {
   if (!value) return null;
   const normalized = String(value).replace(/[,\s]/g, '');
@@ -150,17 +157,20 @@ const buildGoogleFlightsExternalUrl = ({ origin, destination, departureDate, ret
 };
 
 const buildFlightsSerpApiUrl = ({ origin, destination, departureDate, returnDate, adults, children }) => {
+  const normalizedOrigin = normalizeFlightLocation(origin);
+  const normalizedDestination = normalizeFlightLocation(destination);
+
   const params = new URLSearchParams({
     engine: 'google_flights',
     hl: 'es',
     gl: 'es',
     currency: 'USD',
-    departure_id: origin || '',
-    arrival_id: destination,
+    arrival_id: normalizedDestination,
     outbound_date: departureDate,
     api_key: SERPAPI_KEY
   });
 
+  if (normalizedOrigin) params.set('departure_id', normalizedOrigin);
   if (returnDate) params.set('return_date', returnDate);
   params.set('adults', String(Math.max(1, Number(adults) || 1)));
   const kids = Math.max(0, Number(children) || 0);
@@ -243,13 +253,15 @@ const fetchHotelResults = async (searchParams) => {
 app.get('/api/flights', async (req, res) => {
   if (!SERPAPI_KEY) {
     return res.status(500).json({
-      error: 'Falta la clave de SERPAPI. Define la variable de entorno SERPAPI_KEY antes de iniciar el servidor.'
+      error: 'Falta la clave de SERPAPI. Define la variable de entorno SERPAPI_KEY antes de iniciar el servidor.',
+      details: 'Configura SERPAPI_KEY en un archivo .env en la raíz y reinicia el servidor.'
     });
   }
 
   const { origin, destination, departureDate, returnDate, adults, children } = req.query;
+  const normalizedDestination = normalizeFlightLocation(destination);
 
-  if (!destination) {
+  if (!normalizedDestination) {
     return res.status(400).json({ error: 'El parámetro "destination" es obligatorio.' });
   }
 
@@ -260,7 +272,7 @@ app.get('/api/flights', async (req, res) => {
   try {
     const results = await fetchFlightResults({
       origin,
-      destination,
+      destination: normalizedDestination,
       departureDate,
       returnDate,
       adults,
@@ -269,7 +281,7 @@ app.get('/api/flights', async (req, res) => {
 
     return res.json({
       ...results,
-      destination,
+      destination: normalizedDestination,
       origin: origin || null,
       departureDate,
       returnDate: returnDate || null,
