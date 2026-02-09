@@ -942,6 +942,111 @@ const renderRealtimeResults = (items, searchParams = {}, fallbackItems = []) => 
   resultsContainer.appendChild(fragment);
 };
 
+
+const formatFlightDateForGoogle = (value) => {
+  if (!value) return '';
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return '';
+  return `${year}-${month}-${day}`;
+};
+
+const buildGoogleFlightsUrl = ({ origin, destination, checkIn, checkOut, adults, children }) => {
+  const query = new URLSearchParams({
+    hl: 'es'
+  });
+
+  if (origin) query.set('f', origin);
+  if (destination) query.set('t', destination);
+  if (checkIn) query.set('d', formatFlightDateForGoogle(checkIn));
+  if (checkOut) query.set('r', formatFlightDateForGoogle(checkOut));
+  if (Number.isFinite(adults)) query.set('ad', String(Math.max(1, adults)));
+  if (Number.isFinite(children) && children > 0) query.set('ch', String(children));
+
+  return `https://www.google.com/travel/flights?${query.toString()}`;
+};
+
+const renderFlightResults = (flightPayload, searchParams = {}) => {
+  const section = document.createElement('article');
+  section.className = 'result-card flight-card';
+
+  const bestPrice = typeof flightPayload.bestPrice === 'number' ? formatCurrency(flightPayload.bestPrice) : null;
+  const flights = Array.isArray(flightPayload.flights) ? flightPayload.flights : [];
+  const googleFlightsUrl =
+    flightPayload.googleFlightsUrl ||
+    buildGoogleFlightsUrl({
+      origin: searchParams.origin,
+      destination: searchParams.city,
+      checkIn: searchParams.checkIn,
+      checkOut: searchParams.checkOut,
+      adults: searchParams.adults,
+      children: searchParams.children
+    });
+
+  section.innerHTML = `
+    <div class="flight-card__header">
+      <h3>Vuelos en Google Flights</h3>
+      <a class="btn btn--inline" href="${googleFlightsUrl}" target="_blank" rel="noopener noreferrer">Abrir en Google Flights</a>
+    </div>
+    <p class="result-card__dates">Ruta: <strong>${searchParams.origin || 'Origen pendiente'} → ${searchParams.city || 'Destino pendiente'}</strong> · ${formatDateRange(searchParams.checkIn, searchParams.checkOut)}</p>
+    <p class="muted">Pasajeros: ${searchParams.adults || 1} adulto(s)${searchParams.children ? `, ${searchParams.children} niño(s)` : ''}${bestPrice ? ` · Mejor precio: ${bestPrice}` : ''}</p>
+    ${
+      flights.length
+        ? `<table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Aerolínea / Trayecto</th>
+                <th>Duración</th>
+                <th>Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${flights
+                .map(
+                  (flight) => `
+                    <tr>
+                      <td>
+                        <strong>${flight.airline || 'Vuelo disponible'}</strong>
+                        <div class="muted">${flight.route || 'Revisa el detalle en Google Flights'}</div>
+                      </td>
+                      <td>${flight.duration || 'N/D'}</td>
+                      <td>${flight.priceDisplay || (typeof flight.priceAmount === 'number' ? formatCurrency(flight.priceAmount) : 'Ver detalle')}</td>
+                    </tr>
+                  `
+                )
+                .join('')}
+            </tbody>
+          </table>`
+        : '<p class="muted">No pudimos extraer vuelos detallados, pero abrimos la búsqueda en Google Flights con tus filtros.</p>'
+    }
+  `;
+
+  resultsContainer.appendChild(section);
+};
+
+const fetchFlightResults = async (params) => {
+  const query = new URLSearchParams();
+  query.set('destination', params.city);
+  if (params.origin) query.set('origin', params.origin);
+  if (params.checkIn) query.set('departureDate', params.checkIn);
+  if (params.checkOut) query.set('returnDate', params.checkOut);
+  if (params.adults) query.set('adults', String(params.adults));
+  if (Number.isFinite(params.children)) query.set('children', String(params.children));
+
+  const response = await fetch(`/api/flights?${query.toString()}`, {
+    headers: {
+      Accept: 'application/json'
+    }
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'No se pudo completar la búsqueda de vuelos.');
+  }
+
+  return data;
+};
+
 const fetchRealtimeResults = async (params) => {
   const query = new URLSearchParams();
   query.set('city', params.city);
@@ -1004,42 +1109,88 @@ const renderTripPlanSummary = ({ city, adults, children, tripDays, planningField
   resultsContainer.prepend(summaryCard);
 };
 
+const getCurrentTripPlanData = () => {
+  const city = searchForm?.city?.value?.trim() || '';
+  const adults = Number(searchForm?.adults?.value || 1);
+  const children = Number(searchForm?.children?.value || 0);
+  const checkIn = searchForm?.checkIn?.value || '';
+  const checkOut = searchForm?.checkOut?.value || '';
+  const tripDays = calculateTripDays(checkIn, checkOut);
+  const planningFields = getSelectedPlanningFields();
+
+  return {
+    city,
+    adults: Number.isFinite(adults) && adults > 0 ? adults : 1,
+    children: Number.isFinite(children) && children >= 0 ? children : 0,
+    tripDays,
+    planningFields,
+    checkIn,
+    checkOut
+  };
+};
+
+const updateTripPlanSummaryLive = () => {
+  if (!resultsContainer) return;
+  const liveData = getCurrentTripPlanData();
+  const previousSummary = resultsContainer.querySelector('.trip-plan-card');
+  if (previousSummary) {
+    previousSummary.remove();
+  }
+
+  renderTripPlanSummary(liveData);
+};
+
+
 
 if (searchForm) {
   searchForm.addEventListener('input', (event) => {
-    if (event.target.matches('input[name="planningFields"], #adults, #children, #checkIn, #checkOut')) {
+    if (event.target.matches('input[name="planningFields"], #adults, #children, #checkIn, #checkOut, #city, #origin')) {
       syncPlannerPreview();
+      updateTripPlanSummaryLive();
     }
   });
+
+  searchForm.addEventListener('change', (event) => {
+    if (event.target.matches('input[name="planningFields"], #checkIn, #checkOut, #types')) {
+      syncPlannerPreview();
+      updateTripPlanSummaryLive();
+    }
+  });
+
   syncPlannerPreview();
+  updateTripPlanSummaryLive();
 }
 
 searchForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const rawCity = event.target.city.value.trim();
-  const city = rawCity.toLowerCase();
   const adults = Number(event.target.adults.value);
+  const origin = event.target.origin?.value?.trim() || '';
   const children = Number(event.target.children.value);
-  const guests = adults + children;
-  const selectedTypes = Array.from(event.target.types.selectedOptions).map((option) => option.value);
   const planningFields = getSelectedPlanningFields();
   const checkIn = event.target.checkIn.value;
   const checkOut = event.target.checkOut.value;
   const tripDays = calculateTripDays(checkIn, checkOut);
 
   if (!planningFields.length) {
-    resultsContainer.innerHTML = '<p class="muted error">Selecciona al menos un campo para planificar el viaje (vuelos, hospedaje o días).</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Selecciona al menos un campo para planificar el viaje (vuelos, hospedaje o días).');
+    updateTripPlanSummaryLive();
     return;
   }
 
   if (!Number.isFinite(adults) || adults < 1) {
-    resultsContainer.innerHTML = '<p class="muted error">Debe haber al menos 1 adulto en el viaje.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Debe haber al menos 1 adulto en el viaje.');
+    updateTripPlanSummaryLive();
     return;
   }
 
   if (!checkIn || !checkOut) {
-    resultsContainer.innerHTML = '<p class="muted error">Por favor selecciona fechas de check-in y check-out.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('Por favor selecciona fechas de check-in y check-out.');
+    updateTripPlanSummaryLive();
     return;
   }
 
@@ -1047,105 +1198,58 @@ searchForm.addEventListener('submit', async (event) => {
   const checkOutDate = new Date(checkOut);
 
   if (checkOutDate <= checkInDate) {
-    resultsContainer.innerHTML = '<p class="muted error">La fecha de check-out debe ser posterior a la de check-in.</p>';
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('La fecha de check-out debe ser posterior a la de check-in.');
+    updateTripPlanSummaryLive();
     return;
   }
 
-  let filtered = listings.filter((listing) => {
-    const matchesCity = listing.city.toLowerCase().includes(city);
-    const matchesGuests = listing.capacity >= guests;
-    const matchesType = selectedTypes.length ? selectedTypes.includes(listing.type) : true;
-
-    return matchesCity && matchesGuests && matchesType;
-  });
-  if (!filtered.length) {
-    filtered = generateGenericFallbackListings({ city: rawCity, guests, types: selectedTypes });
-  }
   const displayCity = rawCity || 'tu destino';
 
   toggleOverlay(true, displayCity);
 
   try {
-    const realtime = await fetchRealtimeResults({
-      city: rawCity,
-      guests,
-      checkIn,
-      checkOut,
-      types: selectedTypes
-    });
+    const shouldFetchFlights = planningFields.includes('vuelos');
 
-    toggleOverlay(false);
-
-    if (realtime.length) {
-      renderRealtimeResults(
-        realtime,
-        {
-          city: rawCity,
-          guests,
-          adults,
-          children,
-          tripDays,
-          checkIn,
-          checkOut,
-          types: selectedTypes
-        },
-        filtered
-      );
-      renderTripPlanSummary({
-        city: rawCity,
-        adults,
-        children,
-        tripDays,
-        planningFields,
-        checkIn,
-        checkOut
-      });
-    } else {
-      renderFallbackListings(filtered, {
-        city: rawCity,
-        guests,
-        adults,
-        children,
-        tripDays,
-        checkIn,
-        checkOut,
-        types: selectedTypes
-      });
-      renderTripPlanSummary({
-        city: rawCity,
-        adults,
-        children,
-        tripDays,
-        planningFields,
-        checkIn,
-        checkOut
-      });
+    if (!shouldFetchFlights) {
+      toggleOverlay(false);
+      resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+      renderError('Por ahora solo mostramos resultados de vuelos. Activa la opción "Vuelos" para buscar.');
+      updateTripPlanSummaryLive();
+      return;
     }
-  } catch (error) {
-    console.error(error);
-    toggleOverlay(false);
-    renderFallbackListings(filtered, {
+
+    const flightResults = await fetchFlightResults({
       city: rawCity,
-      guests,
-      adults,
-      children,
-      tripDays,
+      origin,
       checkIn,
       checkOut,
-      types: selectedTypes
+      adults,
+      children
     });
-    renderTripPlanSummary({
+
+    toggleOverlay(false);
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+
+    renderFlightResults(flightResults, {
       city: rawCity,
+      origin,
       adults,
       children,
-      tripDays,
-      planningFields,
       checkIn,
       checkOut
     });
-    renderError('No pudimos conectar con los buscadores en tiempo real. Te mostramos referencias aproximadas.');
+    updateTripPlanSummaryLive();
+  } catch (error) {
+    console.error(error);
+    toggleOverlay(false);
+    resultsContainer.querySelectorAll('.result-card:not(.trip-plan-card), .error').forEach((node) => node.remove());
+    renderError('No pudimos conectar con Google Flights en tiempo real.');
+    updateTripPlanSummaryLive();
   }
 });
 
 resultsContainer.innerHTML =
-  '<p class="muted">Introduce tu destino y fechas para consultar a los principales portales en tiempo real.</p>';
+  '<p class="muted">Completa el formulario para ver tu resumen en vivo y buscar vuelos en tiempo real.</p>';
+
+updateTripPlanSummaryLive();
